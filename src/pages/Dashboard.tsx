@@ -14,11 +14,11 @@ import { mockDashboardData, recentTransactions, upcomingEvents, insights } from 
 
 const Dashboard = () => {
   const [period, setPeriod] = useState('hoy');
-  const data = mockDashboardData[period] || mockDashboardData.hoy;
+  const data = useMemo(() => mockDashboardData[period] || mockDashboardData.hoy, [period]);
 
   const randomInsight = useMemo(() => {
     return insights[Math.floor(Math.random() * insights.length)];
-  }, [period]); // Cambia el insight cuando cambia el periodo
+  }, [period]);
 
   return (
     <div className="animate-in fade-in duration-500">
@@ -28,7 +28,6 @@ const Dashboard = () => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        {/* COLUMNA IZQUIERDA */}
         <div className="lg:col-span-8 space-y-8">
           <FinancialOverview metrics={data.financials} />
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -38,13 +37,11 @@ const Dashboard = () => {
           <RecentTransactions transactions={recentTransactions} />
         </div>
 
-        {/* COLUMNA DERECHA */}
         <div className="lg:col-span-4 space-y-8">
           <section>
             <h3 className="text-[10px] font-bold text-text-secondary uppercase tracking-[0.2em] mb-4">Acceso rápido</h3>
             <QuickActions />
           </section>
-          
           <MotorcycleStatus moto={data.moto} />
           <GoalProgress goal={data.goal} />
           <UpcomingEvents events={upcomingEvents} />

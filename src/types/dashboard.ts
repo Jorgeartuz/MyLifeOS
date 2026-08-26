@@ -1,22 +1,6 @@
-// src/types/dashboard.ts
-
-// Borramos la línea de ReactNode porque no la estamos usando aquí
-export type Trend = 'up' | 'down' | 'neutral';
-
 import { type ReactNode } from 'react';
 
-export interface WorkStatProps {
-  icon: ReactNode;
-  label: string;
-  value: string | number;
-  color?: string;
-}
-
-export interface EventItem {
-  title: string;
-  date: string;
-  category: string;
-}
+export type Trend = 'up' | 'down' | 'neutral';
 
 export interface FinancialMetric {
   title: string;
@@ -34,6 +18,13 @@ export interface WorkData {
   otherCosts: number;
 }
 
+export interface WorkStatProps {
+  icon: ReactNode;
+  label: string;
+  value: string | number;
+  color?: string;
+}
+
 export interface Transaction {
   id: string;
   category: string;
@@ -41,6 +32,12 @@ export interface Transaction {
   date: string;
   amount: number;
   type: 'income' | 'expense';
+}
+
+export interface EventItem {
+  title: string;
+  date: string;
+  category: string;
 }
 
 export interface DashboardData {
@@ -54,7 +51,7 @@ export interface DashboardData {
   moto: {
     model: string;
     kilometers: number;
-    status: 'Operativa' | 'Mantenimiento' | 'Revisar';
+    status: 'Operativa' | 'Mantenimiento';
     nextMaintenance: string;
     nextMaintenanceKm: number;
     lastMaintenanceKm: number;
