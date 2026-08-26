@@ -3,6 +3,21 @@
 // Borramos la línea de ReactNode porque no la estamos usando aquí
 export type Trend = 'up' | 'down' | 'neutral';
 
+import { type ReactNode } from 'react';
+
+export interface WorkStatProps {
+  icon: ReactNode;
+  label: string;
+  value: string | number;
+  color?: string;
+}
+
+export interface EventItem {
+  title: string;
+  date: string;
+  category: string;
+}
+
 export interface FinancialMetric {
   title: string;
   value: number;
