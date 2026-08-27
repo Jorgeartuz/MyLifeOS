@@ -18,6 +18,7 @@ interface FinancialOverviewProps {
   };
 }
 
+// Interfaz para corregir el error de "any"
 interface MetricCardProps {
   metric: FinancialMetric;
   icon: ReactNode;
@@ -28,7 +29,7 @@ interface MetricCardProps {
 export const FinancialOverview = ({ metrics }: FinancialOverviewProps) => {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-      {/* Tarjeta de Balance Disponible (Destacada) */}
+      {/* Tarjeta de Disponible */}
       <div className="bg-primary p-6 rounded-card shadow-lg shadow-primary/20 text-white relative overflow-hidden group">
         <div className="absolute right-[-10%] top-[-10%] opacity-10 group-hover:scale-110 transition-transform duration-500">
           <Wallet size={120} />
@@ -42,7 +43,6 @@ export const FinancialOverview = ({ metrics }: FinancialOverviewProps) => {
         </div>
       </div>
 
-      {/* Tarjetas de Métricas Secundarias */}
       <MetricCard 
         metric={metrics.income} 
         icon={<TrendingUp size={20}/>} 
@@ -65,12 +65,11 @@ export const FinancialOverview = ({ metrics }: FinancialOverviewProps) => {
   );
 };
 
-// Sub-componente MetricCard con Tipado Estricto (Sin ANY)
 const MetricCard = ({ metric, icon, color, bg }: MetricCardProps) => {
   const isPositive = metric.trend === 'up';
 
   return (
-    <div className="bg-surface p-6 rounded-card border border-border shadow-sm group hover:border-primary/30 transition-colors">
+    <div className="bg-surface p-6 rounded-card border border-border shadow-sm transition-all hover:border-primary/30 group">
       <div className="flex justify-between items-start">
         <div className={`p-2 rounded-lg ${bg} ${color} group-hover:scale-110 transition-transform`}>
           {icon}
@@ -80,9 +79,7 @@ const MetricCard = ({ metric, icon, color, bg }: MetricCardProps) => {
           {Math.abs(metric.change)}%
         </div>
       </div>
-      <p className="text-text-secondary text-xs font-bold uppercase tracking-wider mt-4">
-        {metric.title}
-      </p>
+      <p className="text-text-secondary text-xs font-bold uppercase tracking-wider mt-4">{metric.title}</p>
       <h3 className="text-xl font-bold text-text mt-1">
         ${metric.value.toLocaleString()}
       </h3>

@@ -14,11 +14,15 @@ import { mockDashboardData, recentTransactions, upcomingEvents, insights } from 
 
 const Dashboard = () => {
   const [period, setPeriod] = useState('hoy');
-  const data = useMemo(() => mockDashboardData[period] || mockDashboardData.hoy, [period]);
 
-  const randomInsight = useMemo(() => {
-    return insights[Math.floor(Math.random() * insights.length)];
-  }, [period]);
+  // SOLUCIÓN: Usamos useState con una función inicializadora.
+  // Esto se ejecuta UNA sola vez y es seguro para el linter.
+  const [randomInsight] = useState(() => {
+    const index = Math.floor(Math.random() * insights.length);
+    return insights[index];
+  });
+
+  const data = useMemo(() => mockDashboardData[period] || mockDashboardData.hoy, [period]);
 
   return (
     <div className="animate-in fade-in duration-500">
