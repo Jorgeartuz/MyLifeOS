@@ -1,5 +1,3 @@
-import { type ReactNode } from 'react';
-
 export type WorkPeriod = 'hoy' | 'semana' | 'mes';
 
 export type WorkSessionStatus = 'active' | 'completed' | 'not_started';
@@ -29,10 +27,7 @@ export interface WorkSummaryData {
   otherCosts: number;
 }
 
-export interface WorkMetricProps {
-  icon: ReactNode;
-  label: string;
-  value: string | number;
-  subValue?: string;
-  color?: string;
+export interface WorkInsightData {
+  title: string;
+  message: string;
 }

@@ -1,11 +1,24 @@
+import { type ReactNode } from 'react';
 import { type WorkSummaryData } from '../../types/work';
 import { Clock, Navigation, Target, Zap } from 'lucide-react';
 
+interface MetricItemProps {
+  icon: ReactNode;
+  label: string;
+  value: string | number;
+}
+
 export const ProductivityMetrics = ({ data }: { data: WorkSummaryData }) => {
   const netProfit = data.grossIncome - (data.fuelCost + data.otherCosts);
-  const perHour = Math.round(netProfit / (data.workedHours || 1));
-  const perKm = Math.round(netProfit / (data.kilometers || 1));
-  const perDelivery = Math.round(netProfit / (data.deliveries || 1));
+  
+  // Evitar división por cero
+  const hours = data.workedHours || 1;
+  const kilometers = data.kilometers || 1;
+  const deliveries = data.deliveries || 1;
+
+  const perHour = Math.round(netProfit / hours);
+  const perKm = Math.round(netProfit / kilometers);
+  const perDelivery = Math.round(netProfit / deliveries);
 
   return (
     <div className="bg-surface p-6 rounded-card border border-border shadow-sm">
@@ -22,7 +35,7 @@ export const ProductivityMetrics = ({ data }: { data: WorkSummaryData }) => {
   );
 };
 
-const MetricItem = ({ icon, label, value }: any) => (
+const MetricItem = ({ icon, label, value }: MetricItemProps) => (
   <div className="flex items-center gap-3 p-3 bg-background rounded-xl">
     <div className="text-primary">{icon}</div>
     <div>

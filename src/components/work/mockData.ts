@@ -1,10 +1,16 @@
-import { type WorkSession, type WorkSummaryData } from '../../types/work';
+import { 
+  type WorkSession, 
+  type WorkSummaryData, 
+  type WorkPeriod, 
+  type WorkInsightData 
+} from '../../types/work';
 
+// Datos de la sesión activa
 export const currentSessionMock: WorkSession = {
-  id: 'current-1',
-  date: '2026-08-26',
+  id: 'current-active',
+  date: '26 Ago',
   startTime: '08:00 AM',
-  workedHours: 4.58, // 4h 35m
+  workedHours: 4.5,
   deliveries: 7,
   kilometers: 38,
   grossIncome: 52000,
@@ -15,14 +21,15 @@ export const currentSessionMock: WorkSession = {
   status: 'active'
 };
 
-export const workSummaries: Record<string, WorkSummaryData> = {
+// Resúmenes coherentes (Hoy coincide con la sesión activa)
+export const workSummaries: Record<WorkPeriod, WorkSummaryData> = {
   hoy: {
-    grossIncome: 120000,
-    deliveries: 16,
-    kilometers: 84,
-    workedHours: 8.5,
-    fuelCost: 22000,
-    otherCosts: 5000
+    grossIncome: 52000,
+    deliveries: 7,
+    kilometers: 38,
+    workedHours: 4.5,
+    fuelCost: 12000,
+    otherCosts: 0
   },
   semana: {
     grossIncome: 780000,
@@ -42,9 +49,25 @@ export const workSummaries: Record<string, WorkSummaryData> = {
   }
 };
 
+// Insights estáticos vinculados al período
+export const workInsights: Record<WorkPeriod, WorkInsightData> = {
+  hoy: {
+    title: "Insight de hoy",
+    message: "Tu ganancia neta actual es de $40.000 tras 4.5 horas de ruta."
+  },
+  semana: {
+    title: "Rendimiento semanal",
+    message: "Esta semana tu costo de combustible representa el 18% de tus ingresos."
+  },
+  mes: {
+    title: "Balance mensual",
+    message: "Llevas 420 domicilios realizados. Tu promedio de ganancia por entrega es de $5.333."
+  }
+};
+
 export const recentSessions: WorkSession[] = [
   {
-    id: 's-1',
+    id: 's-prev-1',
     date: '25 Ago',
     startTime: '08:00 AM',
     endTime: '04:30 PM',
@@ -56,21 +79,6 @@ export const recentSessions: WorkSession[] = [
     otherCosts: 2000,
     totalCosts: 20000,
     netProfit: 70000,
-    status: 'completed'
-  },
-  {
-    id: 's-2',
-    date: '24 Ago',
-    startTime: '09:00 AM',
-    endTime: '06:00 PM',
-    workedHours: 9,
-    deliveries: 15,
-    kilometers: 92,
-    grossIncome: 110000,
-    fuelCost: 22000,
-    otherCosts: 0,
-    totalCosts: 22000,
-    netProfit: 88000,
     status: 'completed'
   }
 ];

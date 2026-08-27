@@ -1,28 +1,28 @@
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { DashboardHeader } from '../components/dashboard/DashboardHeader';
 import { FinancialOverview } from '../components/dashboard/FinancialOverview';
 import { WorkOverview } from '../components/dashboard/WorkOverview';
 import { FinancialChart } from '../components/dashboard/FinancialChart';
 import { QuickActions } from '../components/dashboard/QuickActions';
 import { RecentTransactions } from '../components/dashboard/RecentTransactions';
-import { PeriodSelector } from '../components/dashboard/PeriodSelector';
+import { PeriodSelector } from '../components/ui/PeriodSelector';
 import { MotorcycleStatus } from '../components/dashboard/MotorcycleStatus';
 import { GoalProgress } from '../components/dashboard/GoalProgress';
 import { UpcomingEvents } from '../components/dashboard/UpcomingEvents';
 import { MyLifeInsight } from '../components/dashboard/MyLifeInsight';
-import { mockDashboardData, recentTransactions, upcomingEvents, insights } from '../components/dashboard/mockData';
+import { mockDashboardData, recentTransactions, upcomingEvents } from '../components/dashboard/mockData';
+import { type WorkPeriod } from '../types/work';
 
 const Dashboard = () => {
-  const [period, setPeriod] = useState('hoy');
+  const [period, setPeriod] = useState<WorkPeriod>('hoy');
+  const data = mockDashboardData[period];
 
-  // SOLUCIÓN: Usamos useState con una función inicializadora.
-  // Esto se ejecuta UNA sola vez y es seguro para el linter.
-  const [randomInsight] = useState(() => {
-    const index = Math.floor(Math.random() * insights.length);
-    return insights[index];
-  });
-
-  const data = useMemo(() => mockDashboardData[period] || mockDashboardData.hoy, [period]);
+  // Insight estático para el Dashboard basado en el periodo para evitar Math.random()
+  const dashboardInsights: Record<WorkPeriod, string> = {
+    hoy: "Tu disponible ha aumentado un 12% tras la jornada de la mañana.",
+    semana: "Llevas un ritmo de ahorro excelente para tu meta de fondo de emergencia.",
+    mes: "Este mes has reducido tus gastos hormiga en un 15%."
+  };
 
   return (
     <div className="animate-in fade-in duration-500">
@@ -49,7 +49,7 @@ const Dashboard = () => {
           <MotorcycleStatus moto={data.moto} />
           <GoalProgress goal={data.goal} />
           <UpcomingEvents events={upcomingEvents} />
-          <MyLifeInsight insight={randomInsight} />
+          <MyLifeInsight insight={dashboardInsights[period]} />
         </div>
       </div>
     </div>
