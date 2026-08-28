@@ -1,30 +1,39 @@
+// src/types/finance.ts
+export type AccountType = 'cash' | 'bank' | 'digital_wallet' | 'debit_card' | 'credit_card' | 'other';
 
-export type TransactionType = 'income' | 'expense';
+export interface Account {
+  id: string;
+  user_id: string;
+  name: string;
+  type: AccountType;
+  balance: number;
+  is_active: boolean;
+  created_at: string;
+}
 
-export type PaymentMethod = 'cash' | 'nequi' | 'bank' | 'credit_card' | 'debit_card' | 'other';
+export interface Category {
+  id: string;
+  name: string;
+  icon: string;
+  type: 'income' | 'expense';
+  color: string;
+}
 
+// Actualizamos Transaction para que soporte los campos de la UI
 export interface Transaction {
   id: string;
-  type: TransactionType;
-  category: string;
+  account_id: string;
+  category_id?: string; // El ID de la DB
+  category?: string;    // El nombre para la UI
   amount: number;
-  date: string;
+  type: 'income' | 'expense';
   description: string;
-  paymentMethod: PaymentMethod;
-  source?: string;
-  notes?: string;
+  date: string;
+  paymentMethod?: string;
+  created_at: string;
 }
 
-export interface FinanceSummary {
-  balance: number;
-  totalIncome: number;
-  totalExpenses: number;
-  savings: number;
-  savingsRate: number;
-  incomeChange: number;
-  expenseChange: number;
-}
-
+// Añadimos estas interfaces que los componentes de UI necesitan
 export interface CategoryBreakdown {
   label: string;
   amount: number;
@@ -33,9 +42,16 @@ export interface CategoryBreakdown {
 }
 
 export interface FinanceData {
-  summary: FinanceSummary;
+  summary: {
+    balance: number;
+    totalIncome: number;
+    totalExpenses: number;
+    savings: number;
+    savingsRate: number;
+    incomeChange: number;
+    expenseChange: number;
+  };
   transactions: Transaction[];
   incomeSources: CategoryBreakdown[];
   expenseCategories: CategoryBreakdown[];
-  chartData: { label: string; income: number; expense: number }[];
 }
