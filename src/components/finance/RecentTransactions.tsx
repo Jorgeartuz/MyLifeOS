@@ -10,34 +10,20 @@ import {
   Wallet 
 } from 'lucide-react';
 
-// Función auxiliar para obtener el icono según la categoría
-const getIcon = (category?: string) => {
-  if (!category) return <Wallet size={18} />;
+// Función para obtener el icono basado en el nombre de la categoría que viene de la DB
+const getIcon = (categoryName?: string) => {
+  if (!categoryName) return <Wallet size={18} />;
   
-  const c = category.toLowerCase();
-  if (c.includes('domicilio') || c.includes('trabajo')) return <BriefcaseBusiness size={18} />;
-  if (c.includes('gasolina') || c.includes('moto')) return <Bike size={18} />;
-  if (c.includes('alimentación') || c.includes('comida')) return <ShoppingBag size={18} />;
-  if (c.includes('universidad') || c.includes('estudio')) return <GraduationCap size={18} />;
-  if (c.includes('hogar') || c.includes('vivienda')) return <Home size={18} />;
-  if (c.includes('tecnología')) return <Laptop size={18} />;
-  if (c.includes('ocio') || c.includes('entretenimiento')) return <Heart size={18} />;
+  const name = categoryName.toLowerCase();
+  if (name.includes('domicilio') || name.includes('trabajo')) return <BriefcaseBusiness size={18} />;
+  if (name.includes('gasolina') || name.includes('moto')) return <Bike size={18} />;
+  if (name.includes('alimentación') || name.includes('comida')) return <ShoppingBag size={18} />;
+  if (name.includes('universidad') || name.includes('estudio')) return <GraduationCap size={18} />;
+  if (name.includes('hogar')) return <Home size={18} />;
+  if (name.includes('tecnología')) return <Laptop size={18} />;
+  if (name.includes('ocio')) return <Heart size={18} />;
   
   return <Wallet size={18} />;
-};
-
-// Función auxiliar para el texto del método de pago
-const getMethodText = (method?: string) => {
-  if (!method) return 'Efectivo';
-  
-  const m = method.toLowerCase();
-  if (m === 'cash') return 'Efectivo';
-  if (m === 'nequi') return 'Nequi';
-  if (m === 'bank' || m === 'transferencia') return 'Transferencia';
-  if (m === 'credit_card') return 'T. Crédito';
-  if (m === 'debit_card') return 'T. Débito';
-  
-  return method;
 };
 
 export const RecentTransactions = ({ transactions }: { transactions: Transaction[] }) => {
@@ -59,29 +45,31 @@ export const RecentTransactions = ({ transactions }: { transactions: Transaction
         {transactions.map((t) => (
           <div key={t.id} className="p-4 flex items-center justify-between hover:bg-background transition-colors group">
             <div className="flex items-center gap-4">
-              {/* Icono dinámico según categoría */}
+              {/* Le pasamos el nombre de la categoría que viene del JOIN */}
               <div className={`p-2 rounded-full ${t.type === 'income' ? 'bg-green-50 text-green-600' : 'bg-gray-50 text-text-secondary'}`}>
-                {getIcon(t.category)}
+                {getIcon(t.categories?.name)}
               </div>
               
               <div>
                 <p className="text-sm font-bold text-text group-hover:text-primary transition-colors tracking-tight">
-                  {t.description}
+                  {t.description || t.categories?.name || 'Sin descripción'}
                 </p>
                 <div className="flex items-center gap-2 text-[10px] font-bold text-text-secondary uppercase tracking-tighter">
-                  <span>{t.category || 'General'}</span>
+                  {/* Accedemos a la relación categories y accounts */}
+                  <span>{t.categories?.name || 'General'}</span>
                   <span className="opacity-30">•</span>
-                  <span>{getMethodText(t.paymentMethod)}</span>
+                  <span>{t.accounts?.name || 'Cuenta'}</span>
                 </div>
               </div>
             </div>
 
             <div className="text-right">
               <p className={`text-sm font-black ${t.type === 'income' ? 'text-green-600' : 'text-text'}`}>
-                {t.type === 'income' ? '+' : '-'}${Math.abs(t.amount).toLocaleString()}
+                {t.type === 'income' ? '+' : '-'}${Number(t.amount).toLocaleString()}
               </p>
               <p className="text-[10px] text-text-secondary font-medium italic">
-                {t.date}
+                {/* Formateamos la fecha transaction_date */}
+                {new Date(t.transaction_date).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })}
               </p>
             </div>
           </div>

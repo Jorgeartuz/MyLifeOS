@@ -16,7 +16,10 @@ export const CategoryBreakdown = ({ title, items }: Props) => (
             <span className="text-text-secondary">${item.amount.toLocaleString()}</span>
           </div>
           <div className="w-full h-1.5 bg-background rounded-full overflow-hidden">
-            <div className={`h-full ${item.color} rounded-full transition-all duration-500`} style={{ width: `${item.percentage}%` }} />
+            <div 
+              className={`h-full ${item.color} rounded-full transition-all duration-500`} 
+              style={{ width: `${item.percentage}%` }} 
+            />
           </div>
         </div>
       ))}

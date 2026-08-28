@@ -1,5 +1,8 @@
 // src/types/finance.ts
+
 export type AccountType = 'cash' | 'bank' | 'digital_wallet' | 'debit_card' | 'credit_card' | 'other';
+export type CategoryType = 'income' | 'expense' | 'both';
+export type TransactionType = 'income' | 'expense' | 'transfer';
 
 export interface Account {
   id: string;
@@ -13,27 +16,31 @@ export interface Account {
 
 export interface Category {
   id: string;
+  user_id: string;
   name: string;
-  icon: string;
-  type: 'income' | 'expense';
-  color: string;
+  type: CategoryType;
+  icon: string | null;
+  is_active: boolean;
 }
 
-// Actualizamos Transaction para que soporte los campos de la UI
 export interface Transaction {
   id: string;
+  user_id: string;
   account_id: string;
-  category_id?: string; // El ID de la DB
-  category?: string;    // El nombre para la UI
+  category_id: string | null;
+  type: TransactionType;
   amount: number;
-  type: 'income' | 'expense';
-  description: string;
-  date: string;
-  paymentMethod?: string;
+  transaction_date: string;
+  description: string | null;
+  source: string | null;
+  notes: string | null;
   created_at: string;
+  // Campos de JOIN (opcionales para la UI)
+  categories?: { name: string; icon: string | null };
+  accounts?: { name: string };
 }
 
-// Añadimos estas interfaces que los componentes de UI necesitan
+// ESTA ES LA INTERFAZ QUE TE FALTABA:
 export interface CategoryBreakdown {
   label: string;
   amount: number;
