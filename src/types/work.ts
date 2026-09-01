@@ -1,3 +1,5 @@
+// src/types/work.ts
+
 export type WorkPeriod = 'hoy' | 'semana' | 'mes';
 export type WorkSessionStatus = 'active' | 'completed';
 
@@ -26,5 +28,10 @@ export interface WorkSummaryData {
   fuelCost: number;
   otherCosts: number;
   totalSessions: number;
-  workedHours: number; // Campo añadido
+  workedHours: number;
+}
+
+export interface WorkInsightData {
+  title: string;
+  message: string;
 }
