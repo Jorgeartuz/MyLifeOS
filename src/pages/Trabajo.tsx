@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { WorkHeader } from '../components/work/WorkHeader';
 import { PeriodSelector } from '../components/ui/PeriodSelector';
 import { ActiveSessionCard } from '../components/work/ActiveSessionCard';
@@ -7,22 +7,83 @@ import { ProductivityMetrics } from '../components/work/ProductivityMetrics';
 import { WorkChart } from '../components/work/WorkChart';
 import { RecentWorkSessions } from '../components/work/RecentWorkSessions';
 import { WorkQuickActions } from '../components/work/WorkQuickActions';
-import { MyLifeInsight } from '../components/dashboard/MyLifeInsight';
-import { 
-  workSummaries, 
-  recentSessions, 
-  currentSessionMock, 
-  workInsights 
-} from '../components/work/mockData';
-import { type WorkPeriod } from '../types/work';
+import { WorkModal } from '../components/work/WorkModal';
+import { workService } from '../services/work.service';
+import { type WorkPeriod, type WorkSession, type WorkSummaryData } from '../types/work';
+import { Loader2 } from 'lucide-react';
 
 const Trabajo = () => {
-  // Estado explícitamente tipado
   const [period, setPeriod] = useState<WorkPeriod>('hoy');
+  const [activeSession, setActiveSession] = useState<WorkSession | null>(null);
+  const [sessions, setSessions] = useState<WorkSession[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // Acceso directo sin fallbacks silenciosos
-  const data = workSummaries[period];
-  const insight = workInsights[period];
+  const loadData = useCallback(async () => {
+    try {
+      const [active, history] = await Promise.all([
+        workService.getActiveSession(),
+        workService.getSessions(period)
+      ]);
+      setActiveSession(active);
+      setSessions(history);
+    } catch (error) {
+      console.error('Error al cargar datos:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [period]);
+
+  // SOLUCIÓN LINTER: Ejecución segura del efecto asíncrono
+  useEffect(() => {
+    let isMounted = true;
+    const executeLoad = async () => {
+      if (isMounted) await loadData();
+    };
+    executeLoad();
+    return () => { isMounted = false; };
+  }, [loadData]);
+
+  const summary: WorkSummaryData = sessions.reduce((acc, s) => ({
+    grossIncome: acc.grossIncome + Number(s.gross_income),
+    deliveries: acc.deliveries + s.deliveries,
+    kilometers: acc.kilometers + Number(s.kilometers),
+    workedMinutes: acc.workedMinutes + (s.worked_minutes || 0),
+    fuelCost: acc.fuelCost + Number(s.fuel_cost),
+    otherCosts: acc.otherCosts + Number(s.other_costs),
+    totalSessions: acc.totalSessions + 1,
+    workedHours: (acc.workedMinutes + (s.worked_minutes || 0)) / 60
+  }), { grossIncome: 0, deliveries: 0, kilometers: 0, workedMinutes: 0, fuelCost: 0, otherCosts: 0, totalSessions: 0, workedHours: 0 });
+
+  const handleStartWork = async () => {
+    try {
+      await workService.startSession();
+      await loadData();
+    } catch (err: unknown) { // CORRECCIÓN: eliminada el any
+      const message = err instanceof Error ? err.message : 'Error desconocido';
+      alert(message);
+    }
+  };
+
+  const handleEndWork = async () => {
+    if (!activeSession) return;
+    if (window.confirm("¿Deseas finalizar la jornada actual?")) {
+      try {
+        await workService.endSession(activeSession);
+        await loadData();
+      } catch (err) {
+        console.error(err);
+      }
+    }
+  };
+
+  if (loading && sessions.length === 0) {
+    return (
+      <div className="flex h-[60vh] items-center justify-center">
+        <Loader2 className="animate-spin text-primary" size={32} />
+      </div>
+    );
+  }
 
   return (
     <div className="animate-in fade-in duration-500 pb-20">
@@ -33,34 +94,46 @@ const Trabajo = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         <div className="lg:col-span-8 space-y-8">
-          <ActiveSessionCard session={period === 'hoy' ? currentSessionMock : null} />
+          <ActiveSessionCard 
+            session={activeSession} 
+            onEnd={handleEndWork} 
+            onUpdate={() => setIsModalOpen(true)}
+          />
           
-          <WorkSummary data={data} />
+          <WorkSummary data={summary} />
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             <WorkChart />
-            <ProductivityMetrics data={data} />
+            <ProductivityMetrics data={summary} />
           </div>
 
-          <RecentWorkSessions sessions={recentSessions} />
+          <RecentWorkSessions sessions={sessions.filter(s => s.status === 'completed')} />
         </div>
 
         <div className="lg:col-span-4 space-y-8">
-          <section>
-            <h3 className="text-[10px] font-bold text-text-secondary uppercase tracking-[0.2em] mb-4">Acciones de campo</h3>
-            <WorkQuickActions />
-          </section>
-
-          <MyLifeInsight insight={insight.message} />
-
-          <div className="bg-surface p-6 rounded-card border border-border shadow-sm">
-            <h3 className="text-sm font-bold text-text uppercase mb-4 tracking-tight">Estado de la Moto</h3>
-            <p className="text-xs text-text-secondary leading-relaxed">
-              Basado en tus kilómetros registrados, el sistema estima que te faltan 762 km para el próximo mantenimiento.
-            </p>
-          </div>
+          <WorkQuickActions 
+            hasActiveSession={!!activeSession} 
+            onStart={handleStartWork}
+            onUpdate={() => setIsModalOpen(true)}
+            onEnd={handleEndWork}
+          />
         </div>
       </div>
+
+      <WorkModal 
+  // La KEY es la clave. Al cambiar el ID o el estado de apertura, 
+  // React destruye el modal viejo y crea uno nuevo con los datos frescos en el useState.
+  key={`${activeSession?.id}-${isModalOpen}`} 
+  isOpen={isModalOpen} 
+  session={activeSession} 
+  onClose={() => setIsModalOpen(false)} 
+  onSave={async (updates) => {
+    if (activeSession) {
+      await workService.updateSession(activeSession.id, updates);
+      await loadData();
+    }
+  }}
+/>
     </div>
   );
 };
