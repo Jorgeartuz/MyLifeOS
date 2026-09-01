@@ -2,13 +2,23 @@ import React, { useState } from 'react';
 import { X, Loader2 } from 'lucide-react';
 import type { Account, Category, TransactionType } from '../../types/finance';
 
+// Definimos la interfaz para los datos que se envían
+interface TransactionPayload {
+  account_id: string;
+  category_id: string;
+  amount: number;
+  type: TransactionType;
+  description: string;
+  transaction_date: string;
+}
+
 interface Props {
   isOpen: boolean;
   onClose: () => void;
   accounts: Account[];
   categories: Category[];
   onSuccess: () => void;
-  onSubmit: (data: any) => Promise<void>;
+  onSubmit: (data: TransactionPayload) => Promise<void>; // TIPADO AQUÍ
 }
 
 export const TransactionModal = ({ isOpen, onClose, accounts, categories, onSubmit, onSuccess }: Props) => {
@@ -43,8 +53,9 @@ export const TransactionModal = ({ isOpen, onClose, accounts, categories, onSubm
       });
       onSuccess();
       onClose();
-    } catch (error: any) {
-      alert(error.message || "Error al registrar la transacción");
+    } catch (error: unknown) { // CAMBIADO A UNKNOWN
+      const message = error instanceof Error ? error.message : "Error al registrar la transacción";
+      alert(message);
     } finally {
       setLoading(false);
     }
@@ -55,7 +66,9 @@ export const TransactionModal = ({ isOpen, onClose, accounts, categories, onSubm
       <div className="bg-surface w-full max-w-md rounded-card shadow-2xl border border-border animate-in zoom-in duration-200">
         <div className="flex justify-between items-center p-6 border-b border-border">
           <h3 className="font-bold text-text">Registrar Movimiento</h3>
-          <button onClick={onClose} className="p-1 hover:bg-background rounded-full transition-colors"><X size={20} /></button>
+          <button onClick={onClose} className="p-1 hover:bg-background rounded-full transition-colors">
+            <X size={20} />
+          </button>
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">

@@ -1,94 +1,49 @@
-import { type Transaction } from '../../types/dashboard';
-import { 
-  ArrowUpCircle, 
-  ArrowDownCircle, 
-  Bike, 
-  ShoppingBag, 
-  BriefcaseBusiness, 
-  GraduationCap,
-  Plus
-} from 'lucide-react';
+import { type Transaction } from '../../types/finance';
+import { Wallet, ArrowRight } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
-interface RecentTransactionsProps {
-  transactions: Transaction[];
-}
-
-// Función auxiliar para asignar iconos según la categoría
-const getCategoryIcon = (category: string, type: 'income' | 'expense') => {
-  const cat = category.toLowerCase();
-  if (cat.includes('trabajo') || cat.includes('domicilio')) return <BriefcaseBusiness size={18} />;
-  if (cat.includes('moto') || cat.includes('gasolina')) return <Bike size={18} />;
-  if (cat.includes('alimento') || cat.includes('comida')) return <ShoppingBag size={18} />;
-  if (cat.includes('universidad') || cat.includes('estudio')) return <GraduationCap size={18} />;
-  
-  // Icono por defecto según si es ingreso o gasto
-  return type === 'income' ? <ArrowUpCircle size={18} /> : <ArrowDownCircle size={18} />;
-};
-
-export const RecentTransactions = ({ transactions }: RecentTransactionsProps) => {
-  return (
-    <div className="bg-surface p-6 rounded-card border border-border shadow-sm">
-      <div className="flex items-center justify-between mb-6">
-        <h3 className="font-bold text-text">Actividad reciente</h3>
-        <button className="text-xs font-bold text-primary hover:text-primary-dark transition-colors flex items-center gap-1">
-          <Plus size={14} /> Ver historial
-        </button>
+export const RecentTransactions = ({ transactions }: { transactions: Transaction[] }) => {
+  if (transactions.length === 0) {
+    return (
+      <div className="bg-surface p-8 rounded-card border border-border text-center shadow-sm">
+        <p className="text-text-secondary text-sm italic">No tienes movimientos todavía.</p>
+        <Link to="/finanzas" className="text-primary text-xs font-bold mt-2 inline-block hover:underline">
+          Registrar mi primer movimiento
+        </Link>
       </div>
+    );
+  }
 
-      <div className="space-y-4">
-        {transactions.map((transaction) => (
-          <div 
-            key={transaction.id} 
-            className="flex items-center justify-between group cursor-default"
-          >
-            <div className="flex items-center gap-4">
-              {/* Icono de Categoría */}
-              <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${
-                transaction.type === 'income' 
-                  ? 'bg-green-50 text-green-600 group-hover:bg-green-100' 
-                  : 'bg-background text-text-secondary group-hover:bg-border'
-              }`}>
-                {getCategoryIcon(transaction.category, transaction.type)}
+  return (
+    <div className="bg-surface rounded-card border border-border shadow-sm overflow-hidden">
+      <div className="p-6 border-b border-border flex justify-between items-center">
+        <h3 className="font-bold text-text">Últimos movimientos</h3>
+        <Link to="/finanzas" className="text-primary text-xs font-bold hover:underline flex items-center gap-1">
+          Ver todos <ArrowRight size={14} />
+        </Link>
+      </div>
+      <div className="divide-y divide-border">
+        {transactions.map((t) => (
+          <div key={t.id} className="p-4 flex items-center justify-between hover:bg-background transition-colors">
+            <div className="flex items-center gap-3">
+              <div className={`p-2 rounded-lg ${t.type === 'income' ? 'bg-green-50 text-green-600' : 'bg-gray-50 text-text-secondary'}`}>
+                <Wallet size={18} />
               </div>
-
-              {/* Información del movimiento */}
               <div>
-                <p className="text-sm font-bold text-text group-hover:text-primary transition-colors">
-                  {transaction.description}
-                </p>
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-text-secondary">
-                    {transaction.category}
-                  </span>
-                  <span className="text-border text-[10px]">•</span>
-                  <p className="text-[11px] text-text-secondary">
-                    {transaction.date}
-                  </p>
-                </div>
+                <p className="text-sm font-bold text-text leading-tight">{t.description || t.categories?.name}</p>
+                <p className="text-[10px] text-text-secondary font-bold uppercase mt-0.5">{t.categories?.name || 'General'}</p>
               </div>
             </div>
-
-            {/* Monto */}
             <div className="text-right">
-              <p className={`text-sm font-bold ${
-                transaction.type === 'income' ? 'text-green-600' : 'text-text'
-              }`}>
-                {transaction.type === 'income' ? '+' : ''}
-                ${transaction.amount.toLocaleString('es-CO')}
+              <p className={`text-sm font-black ${t.type === 'income' ? 'text-green-600' : 'text-text'}`}>
+                {t.type === 'income' ? '+' : '-'}${Number(t.amount).toLocaleString()}
               </p>
               <p className="text-[10px] text-text-secondary font-medium italic">
-                Confirmado
+                {new Date(t.transaction_date).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })}
               </p>
             </div>
           </div>
         ))}
-      </div>
-
-      {/* Botón de acción rápida inferior (Opcional, estilo SaaS) */}
-      <div className="mt-6 pt-6 border-t border-border">
-        <button className="w-full py-2.5 bg-background hover:bg-border text-text-secondary text-xs font-bold rounded-lg transition-all active:scale-[0.98]">
-          Descargar reporte del mes
-        </button>
       </div>
     </div>
   );
