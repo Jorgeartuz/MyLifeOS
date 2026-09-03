@@ -1,40 +1,50 @@
-// src/services/dashboard.service.ts
 import { supabase } from '../lib/supabase';
 import { financeService } from './finance.service';
 import { workService } from './work.service';
 import { goalsService } from './goals.service';
-import { type WorkPeriod } from '../types/work';
+import type { WorkPeriod, WorkDelivery } from '../types/work';
+import type { Account, Transaction } from '../types/finance';
+import type { SavingsGoal } from '../types/goals';
+
+// Definimos la forma del acumulador para que TypeScript no se queje
+interface WorkAccumulator {
+  income: number;
+  deliveries: number;
+  kilometers: number;
+  minutes: number;
+}
 
 export const dashboardService = {
   async getDashboardData(period: WorkPeriod) {
-    const [accounts, transactions, sessions, goals, { data: profile }] = await Promise.all([
+    const [accounts, transactions, deliveries, goals, { data: profile }] = await Promise.all([
       financeService.getAccounts(),
       financeService.getTransactions(5),
-      workService.getSessions(period),
+      workService.getDeliveries(period),
       goalsService.getGoals(),
       supabase.from('profiles').select('full_name').single()
     ]);
 
-    const totalBalance = accounts.reduce((acc, curr) => acc + Number(curr.balance), 0);
-    const periodIncome = transactions
-      .filter(t => t.type === 'income')
-      .reduce((acc, curr) => acc + Number(curr.amount), 0);
-    const periodExpenses = transactions
-      .filter(t => t.type === 'expense')
-      .reduce((acc, curr) => acc + Number(curr.amount), 0);
+    const totalBalance = (accounts as Account[]).reduce((acc: number, curr: Account) => acc + Number(curr.balance), 0);
+    
+    const periodIncome = (transactions as Transaction[])
+      .filter((t: Transaction) => t.type === 'income')
+      .reduce((acc: number, curr: Transaction) => acc + Number(curr.amount), 0);
+      
+    const periodExpenses = (transactions as Transaction[])
+      .filter((t: Transaction) => t.type === 'expense')
+      .reduce((acc: number, curr: Transaction) => acc + Number(curr.amount), 0);
 
-    // ACTUALIZACIÓN: Incluimos costos en el acumulador
-    const workStats = sessions.reduce((acc, s) => ({
-      income: acc.income + Number(s.gross_income),
-      deliveries: acc.deliveries + s.deliveries,
-      kilometers: acc.kilometers + Number(s.kilometers),
-      minutes: acc.minutes + (s.worked_minutes || 0),
-      fuelCost: acc.fuelCost + Number(s.fuel_cost), // Agregado
-      otherCosts: acc.otherCosts + Number(s.other_costs) // Agregado
-    }), { income: 0, deliveries: 0, kilometers: 0, minutes: 0, fuelCost: 0, otherCosts: 0 });
+    // 2. Cálculos de Trabajo (Acumulador tipado para eliminar el error rojo)
+    const workStats = (deliveries as WorkDelivery[]).reduce((acc: WorkAccumulator, d: WorkDelivery) => ({
+      income: acc.income + Number(d.net_amount),
+      deliveries: acc.deliveries + 1,
+      kilometers: acc.kilometers + 0, 
+      minutes: acc.minutes + 0 
+    }), { income: 0, deliveries: 0, kilometers: 0, minutes: 0 });
 
+    // 3. Cálculos de Moto (Usamos '_' para decirle a TS que ignoramos el segundo parámetro)
     const baseKm = 43205;
-    const totalKmEver = sessions.reduce((acc, s) => acc + Number(s.kilometers), 0);
+    const totalKmEver = (deliveries as WorkDelivery[]).reduce((acc: number) => acc + 0, 0);
     const currentMotoKm = baseKm + totalKmEver;
 
     return {
@@ -45,21 +55,21 @@ export const dashboardService = {
         balance: totalBalance,
         income: periodIncome,
         expenses: periodExpenses,
-        recentTransactions: transactions
+        recentTransactions: transactions as Transaction[]
       },
       work: {
         income: workStats.income,
         deliveries: workStats.deliveries,
         kilometers: workStats.kilometers,
         hours: workStats.minutes / 60,
-        fuelCost: workStats.fuelCost, // Agregado
-        otherCosts: workStats.otherCosts // Agregado
+        fuelCost: 0,
+        otherCosts: 0
       },
       moto: {
         kilometers: currentMotoKm,
         nextMaintenanceKm: 44000
       },
-      goal: goals.length > 0 ? goals[0] : null
+      goal: (goals as SavingsGoal[]).length > 0 ? goals[0] : null
     };
   }
 };

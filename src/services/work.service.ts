@@ -1,91 +1,126 @@
 import { supabase } from '../lib/supabase';
-import { type WorkSession, type WorkPeriod } from '../types/work';
+import { financeService } from './finance.service';
+import type { WorkPackage, WorkDelivery, WorkPeriod } from '../types/work';
 
 export const workService = {
-  async getActiveSession() {
+  // --- PAQUETES ---
+  async getActivePackage() {
     const { data, error } = await supabase
-      .from('work_sessions')
+      .from('work_packages')
       .select('*')
       .eq('status', 'active')
+      .gt('remaining_deliveries', 0)
       .maybeSingle();
     if (error) throw error;
-    return data as WorkSession | null;
+    return data as WorkPackage | null;
   },
 
-  async getSessions(period: WorkPeriod) {
-    let query = supabase.from('work_sessions').select('*').order('start_time', { ascending: false });
+  async buyPackage(size: number, price: number, accountId: string) {
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    // 1. Registrar gasto en Finanzas
+    const transaction = await financeService.createTransaction({
+      account_id: accountId,
+      category_id: '792f3922-069a-4f51-8740-42013f9c6691', // ID de categoría 'Trabajo' o 'Otros'
+      amount: price,
+      type: 'expense',
+      description: `Compra paquete ${size} domicilios`,
+      transaction_date: new Date().toISOString()
+    });
+
+    // 2. Crear paquete
+    const { data, error } = await supabase
+      .from('work_packages')
+      .insert([{
+        user_id: user?.id,
+        package_size: size,
+        price,
+        remaining_deliveries: size,
+        financial_transaction_id: transaction.id
+      }])
+      .select().single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  // --- DOMICILIOS ---
+  async registerDelivery(amount: number, method: 'cash' | 'transfer', accountId?: string) {
+    const { data: { user } } = await supabase.auth.getUser();
+    const activePackage = await this.getActivePackage();
+
+    let commission = 0;
+    let net = amount;
+    let financialTxId = null;
+
+    // Lógica de Comisión vs Paquete
+    if (!activePackage) {
+      commission = amount * 0.20;
+      net = amount - commission;
+    }
+
+    // Si es transferencia, crear ingreso en Finanzas
+    if (method === 'transfer' && accountId) {
+      const tx = await financeService.createTransaction({
+        account_id: accountId,
+        category_id: '792f3922-069a-4f51-8740-42013f9c6691', // Categoría Domicilios (Ingreso)
+        amount: amount,
+        type: 'income',
+        description: `Domicilio $${amount}`,
+        transaction_date: new Date().toISOString()
+      });
+      financialTxId = tx.id;
+    }
+
+    // 1. Insertar Domicilio
+    const { data: delivery, error: dError } = await supabase
+      .from('work_deliveries')
+      .insert([{
+        user_id: user?.id,
+        amount,
+        payment_method: method,
+        account_id: accountId || null,
+        package_id: activePackage?.id || null,
+        commission_amount: commission,
+        net_amount: net,
+        financial_transaction_id: financialTxId
+      }])
+      .select().single();
+
+    if (dError) throw dError;
+
+    // 2. Si había paquete, descontar 1
+    if (activePackage) {
+      const newRemaining = activePackage.remaining_deliveries - 1;
+      await supabase
+        .from('work_packages')
+        .update({ 
+          remaining_deliveries: newRemaining,
+          used_deliveries: activePackage.used_deliveries + 1,
+          status: newRemaining === 0 ? 'exhausted' : 'active'
+        })
+        .eq('id', activePackage.id);
+    }
+
+    return delivery;
+  },
+
+  async getDeliveries(period: WorkPeriod) {
+    let query = supabase
+      .from('work_deliveries')
+      .select('*, accounts(name)')
+      .order('created_at', { ascending: false });
 
     const now = new Date();
     if (period === 'hoy') {
-      const startOfDay = new Date(now.setHours(0, 0, 0, 0)).toISOString();
-      query = query.gte('start_time', startOfDay);
+      query = query.gte('created_at', new Date(now.setHours(0,0,0,0)).toISOString());
     } else if (period === 'semana') {
       const startOfWeek = new Date(now.setDate(now.getDate() - now.getDay())).toISOString();
-      query = query.gte('start_time', startOfWeek);
-    } else if (period === 'mes') {
-      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-      query = query.gte('start_time', startOfMonth);
+      query = query.gte('created_at', startOfWeek);
     }
 
     const { data, error } = await query;
     if (error) throw error;
-    return data as WorkSession[];
-  },
-
-  async startSession() {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('No auth user');
-
-    const active = await this.getActiveSession();
-    if (active) throw new Error('Ya tienes una jornada activa');
-
-    const { data, error } = await supabase
-      .from('work_sessions')
-      .insert([{
-        user_id: user.id,
-        start_time: new Date().toISOString(),
-        status: 'active',
-        deliveries: 0,
-        kilometers: 0,
-        gross_income: 0,
-        fuel_cost: 0,
-        other_costs: 0
-      }])
-      .select()
-      .single();
-
-    if (error) throw error;
-    return data as WorkSession;
-  },
-
-  async updateSession(id: string, updates: Partial<WorkSession>) {
-    const { data, error } = await supabase
-      .from('work_sessions')
-      .update(updates)
-      .eq('id', id)
-      .select()
-      .single();
-    if (error) throw error;
-    return data as WorkSession;
-  },
-
-  async endSession(session: WorkSession) {
-    const endTime = new Date();
-    const startTime = new Date(session.start_time);
-    const workedMinutes = Math.floor((endTime.getTime() - startTime.getTime()) / 60000);
-
-    const { data, error } = await supabase
-      .from('work_sessions')
-      .update({
-        end_time: endTime.toISOString(),
-        worked_minutes: workedMinutes,
-        status: 'completed'
-      })
-      .eq('id', session.id)
-      .select()
-      .single();
-
-    if (error) throw error;
-    return data as WorkSession;
+    return data as WorkDelivery[];
   }
 };
