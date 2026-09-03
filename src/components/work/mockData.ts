@@ -58,26 +58,9 @@ export const workSummaries: Record<WorkPeriod, WorkSummaryData> = {
 };
 
 export const workInsights: Record<WorkPeriod, WorkInsightData> = {
-  hoy: { title: "Insight de hoy", message: "Tu ganancia neta actual es de $40.000." },
-  semana: { title: "Semana", message: "Buen ritmo de entregas." },
-  mes: { title: "Mes", message: "Promedio estable." }
+  hoy: { title: "Hoy", message: "Buen ritmo." },
+  semana: { title: "Semana", message: "Estable." },
+  mes: { title: "Mes", message: "Objetivo cumplido." }
 };
 
-export const recentSessions: WorkSession[] = [
-  {
-    id: 's-prev-1',
-    user_id: dummyUser,
-    start_time: new Date().toISOString(),
-    end_time: new Date().toISOString(),
-    worked_minutes: 510,
-    deliveries: 12,
-    kilometers: 74,
-    gross_income: 90000,
-    fuel_cost: 18000,
-    other_costs: 2000,
-    notes: null,
-    status: 'completed',
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString()
-  }
-];
+export const recentSessions: WorkSession[] = [];
