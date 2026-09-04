@@ -4,6 +4,11 @@ import type { WorkPackage, WorkDelivery, WorkPeriod } from '../types/work';
 
 export const workService = {
   // --- PAQUETES ---
+  
+  /**
+   * Obtiene el paquete de domicilios que esté marcado como 'active' 
+   * y que aún tenga domicilios disponibles.
+   */
   async getActivePackage() {
     const { data, error } = await supabase
       .from('work_packages')
@@ -16,11 +21,16 @@ export const workService = {
     return data as WorkPackage | null;
   },
 
+  /**
+   * Registra la compra de un paquete:
+   * 1. Crea un gasto en la cuenta seleccionada en Finanzas.
+   * 2. Crea el registro del paquete en Trabajo.
+   */
   async buyPackage(size: number, price: number, accountId: string) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('No hay usuario autenticado');
 
-    // 1. Buscamos una categoría de gasto adecuada (ej: 'Otros gastos' o 'Moto')
+    // Buscamos una categoría de gasto (por defecto la primera que sea de tipo expense)
     const { data: categories } = await supabase
       .from('categories')
       .select('id')
@@ -32,19 +42,17 @@ export const workService = {
       throw new Error('No se encontró una categoría de gastos para registrar la compra.');
     }
 
-    const categoryId = categories[0].id;
-
-    // 2. Registrar el gasto en Finanzas (esto descuenta el saldo de la cuenta)
+    // 1. Registrar el gasto real en Finanzas (esto actualiza el saldo de la cuenta)
     const transaction = await financeService.createTransaction({
       account_id: accountId,
-      category_id: categoryId,
+      category_id: categories[0].id,
       amount: price,
       type: 'expense',
       description: `Compra paquete ${size} domicilios`,
       transaction_date: new Date().toISOString()
     });
 
-    // 3. Crear el paquete en la tabla work_packages
+    // 2. Crear el paquete en la tabla work_packages
     const { data, error } = await supabase
       .from('work_packages')
       .insert([{
@@ -64,6 +72,13 @@ export const workService = {
   },
 
   // --- DOMICILIOS ---
+
+  /**
+   * Registra un domicilio individual:
+   * 1. Calcula comisión (20% si no hay paquete, 0% si hay paquete).
+   * 2. Si es transferencia, crea un ingreso en Finanzas en la cuenta elegida.
+   * 3. Si hay paquete, descuenta 1 domicilio disponible.
+   */
   async registerDelivery(amount: number, method: 'cash' | 'transfer', accountId?: string) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('No hay usuario autenticado');
@@ -80,7 +95,7 @@ export const workService = {
       net = amount - commission;
     }
 
-    // Si es transferencia, crear ingreso en Finanzas
+    // Lógica Financiera: Solo si es transferencia
     if (method === 'transfer' && accountId) {
       // Buscamos categoría de ingresos (ej: 'Domicilios')
       const { data: inCategories } = await supabase
@@ -101,14 +116,15 @@ export const workService = {
       financialTxId = tx.id;
     }
 
-    // 1. Insertar Domicilio
+    // 1. Insertar el registro del Domicilio
     const { data: delivery, error: dError } = await supabase
       .from('work_deliveries')
       .insert([{
         user_id: user.id,
         amount,
         payment_method: method,
-        account_id: accountId || null,
+        // CORRECCIÓN PUNTUAL: Si es efectivo, el account_id es estrictamente nulo
+        account_id: method === 'transfer' ? (accountId || null) : null,
         package_id: activePackage?.id || null,
         commission_amount: commission,
         net_amount: net,
@@ -118,7 +134,7 @@ export const workService = {
 
     if (dError) throw dError;
 
-    // 2. Si había paquete, descontar 1
+    // 2. Si se usó un paquete, actualizamos su contador
     if (activePackage) {
       const newRemaining = activePackage.remaining_deliveries - 1;
       await supabase
@@ -134,6 +150,9 @@ export const workService = {
     return delivery;
   },
 
+  /**
+   * Obtiene el historial de domicilios filtrado por periodo.
+   */
   async getDeliveries(period: WorkPeriod) {
     let query = supabase
       .from('work_deliveries')
@@ -154,6 +173,8 @@ export const workService = {
 
     const { data, error } = await query;
     if (error) throw error;
+    
+    // Tipado del resultado incluyendo la relación con accounts
     return data as (WorkDelivery & { accounts: { name: string } | null })[];
   }
 };

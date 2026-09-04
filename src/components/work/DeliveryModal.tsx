@@ -95,16 +95,19 @@ export const DeliveryModal = ({ isOpen, onClose, accounts, onSuccess }: Props) =
             <div className="space-y-2 animate-in slide-in-from-top-2 duration-200">
               <label className="text-[10px] font-bold text-text-secondary uppercase px-1">¿A qué cuenta llegó?</label>
               <select 
-                required 
-                value={accountId} 
-                onChange={e => setAccountId(e.target.value)}
-                className="w-full bg-background border border-border rounded-xl py-3 px-4 text-sm font-bold outline-none focus:ring-2 ring-primary/20"
-              >
-                <option value="">Selecciona cuenta...</option>
-                {accounts.map(acc => (
-                  <option key={acc.id} value={acc.id}>{acc.name}</option>
-                ))}
-              </select>
+  required 
+  value={accountId} 
+  onChange={e => setAccountId(e.target.value)}
+  className="w-full bg-background border border-border rounded-xl py-3 px-4 text-sm font-bold outline-none focus:ring-2 ring-primary/20"
+>
+  <option value="">Selecciona cuenta...</option>
+  {accounts
+    .filter(acc => acc.type !== 'cash') // FILTRO: Excluye la cuenta de efectivo de finanzas
+    .map(acc => (
+      <option key={acc.id} value={acc.id}>{acc.name}</option>
+    ))
+  }
+</select>
             </div>
           )}
 
