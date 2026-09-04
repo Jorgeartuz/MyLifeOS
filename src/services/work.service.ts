@@ -11,34 +11,53 @@ export const workService = {
       .eq('status', 'active')
       .gt('remaining_deliveries', 0)
       .maybeSingle();
+    
     if (error) throw error;
     return data as WorkPackage | null;
   },
 
   async buyPackage(size: number, price: number, accountId: string) {
     const { data: { user } } = await supabase.auth.getUser();
-    
-    // 1. Registrar gasto en Finanzas
+    if (!user) throw new Error('No hay usuario autenticado');
+
+    // 1. Buscamos una categoría de gasto adecuada (ej: 'Otros gastos' o 'Moto')
+    const { data: categories } = await supabase
+      .from('categories')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('type', 'expense')
+      .limit(1);
+
+    if (!categories || categories.length === 0) {
+      throw new Error('No se encontró una categoría de gastos para registrar la compra.');
+    }
+
+    const categoryId = categories[0].id;
+
+    // 2. Registrar el gasto en Finanzas (esto descuenta el saldo de la cuenta)
     const transaction = await financeService.createTransaction({
       account_id: accountId,
-      category_id: '792f3922-069a-4f51-8740-42013f9c6691', // ID de categoría 'Trabajo' o 'Otros'
+      category_id: categoryId,
       amount: price,
       type: 'expense',
       description: `Compra paquete ${size} domicilios`,
       transaction_date: new Date().toISOString()
     });
 
-    // 2. Crear paquete
+    // 3. Crear el paquete en la tabla work_packages
     const { data, error } = await supabase
       .from('work_packages')
       .insert([{
-        user_id: user?.id,
+        user_id: user.id,
         package_size: size,
         price,
         remaining_deliveries: size,
+        used_deliveries: 0,
+        status: 'active',
         financial_transaction_id: transaction.id
       }])
-      .select().single();
+      .select()
+      .single();
 
     if (error) throw error;
     return data;
@@ -47,6 +66,8 @@ export const workService = {
   // --- DOMICILIOS ---
   async registerDelivery(amount: number, method: 'cash' | 'transfer', accountId?: string) {
     const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('No hay usuario autenticado');
+
     const activePackage = await this.getActivePackage();
 
     let commission = 0;
@@ -61,12 +82,20 @@ export const workService = {
 
     // Si es transferencia, crear ingreso en Finanzas
     if (method === 'transfer' && accountId) {
+      // Buscamos categoría de ingresos (ej: 'Domicilios')
+      const { data: inCategories } = await supabase
+        .from('categories')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('type', 'income')
+        .limit(1);
+
       const tx = await financeService.createTransaction({
         account_id: accountId,
-        category_id: '792f3922-069a-4f51-8740-42013f9c6691', // Categoría Domicilios (Ingreso)
+        category_id: inCategories?.[0]?.id || '', 
         amount: amount,
         type: 'income',
-        description: `Domicilio $${amount}`,
+        description: `Domicilio registrado $${amount}`,
         transaction_date: new Date().toISOString()
       });
       financialTxId = tx.id;
@@ -76,7 +105,7 @@ export const workService = {
     const { data: delivery, error: dError } = await supabase
       .from('work_deliveries')
       .insert([{
-        user_id: user?.id,
+        user_id: user.id,
         amount,
         payment_method: method,
         account_id: accountId || null,
@@ -113,14 +142,18 @@ export const workService = {
 
     const now = new Date();
     if (period === 'hoy') {
-      query = query.gte('created_at', new Date(now.setHours(0,0,0,0)).toISOString());
+      const startOfDay = new Date();
+      startOfDay.setHours(0, 0, 0, 0);
+      query = query.gte('created_at', startOfDay.toISOString());
     } else if (period === 'semana') {
-      const startOfWeek = new Date(now.setDate(now.getDate() - now.getDay())).toISOString();
-      query = query.gte('created_at', startOfWeek);
+      const startOfWeek = new Date();
+      startOfWeek.setDate(now.getDate() - now.getDay());
+      startOfWeek.setHours(0, 0, 0, 0);
+      query = query.gte('created_at', startOfWeek.toISOString());
     }
 
     const { data, error } = await query;
     if (error) throw error;
-    return data as WorkDelivery[];
+    return data as (WorkDelivery & { accounts: { name: string } | null })[];
   }
 };
