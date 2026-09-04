@@ -1,14 +1,11 @@
 import { supabase } from '../lib/supabase';
 import { financeService } from './finance.service';
+// Importamos solo lo que realmente usamos para que no haya avisos de "unused"
 import type { WorkPackage, WorkDelivery, WorkPeriod } from '../types/work';
 
 export const workService = {
   // --- PAQUETES ---
   
-  /**
-   * Obtiene el paquete de domicilios que esté marcado como 'active' 
-   * y que aún tenga domicilios disponibles.
-   */
   async getActivePackage() {
     const { data, error } = await supabase
       .from('work_packages')
@@ -21,16 +18,10 @@ export const workService = {
     return data as WorkPackage | null;
   },
 
-  /**
-   * Registra la compra de un paquete:
-   * 1. Crea un gasto en la cuenta seleccionada en Finanzas.
-   * 2. Crea el registro del paquete en Trabajo.
-   */
   async buyPackage(size: number, price: number, accountId: string) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('No hay usuario autenticado');
 
-    // Buscamos una categoría de gasto (por defecto la primera que sea de tipo expense)
     const { data: categories } = await supabase
       .from('categories')
       .select('id')
@@ -39,10 +30,9 @@ export const workService = {
       .limit(1);
 
     if (!categories || categories.length === 0) {
-      throw new Error('No se encontró una categoría de gastos para registrar la compra.');
+      throw new Error('Crea una categoría de gastos primero en la sección de Finanzas.');
     }
 
-    // 1. Registrar el gasto real en Finanzas (esto actualiza el saldo de la cuenta)
     const transaction = await financeService.createTransaction({
       account_id: accountId,
       category_id: categories[0].id,
@@ -52,7 +42,6 @@ export const workService = {
       transaction_date: new Date().toISOString()
     });
 
-    // 2. Crear el paquete en la tabla work_packages
     const { data, error } = await supabase
       .from('work_packages')
       .insert([{
@@ -73,68 +62,68 @@ export const workService = {
 
   // --- DOMICILIOS ---
 
-  /**
-   * Registra un domicilio individual:
-   * 1. Calcula comisión (20% si no hay paquete, 0% si hay paquete).
-   * 2. Si es transferencia, crea un ingreso en Finanzas en la cuenta elegida.
-   * 3. Si hay paquete, descuenta 1 domicilio disponible.
-   */
   async registerDelivery(amount: number, method: 'cash' | 'transfer', accountId?: string) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('No hay usuario autenticado');
 
     const activePackage = await this.getActivePackage();
-
     let commission = 0;
     let net = amount;
-    let financialTxId = null;
+    let targetAccountId = accountId;
 
-    // Lógica de Comisión vs Paquete
     if (!activePackage) {
       commission = amount * 0.20;
       net = amount - commission;
     }
 
-    // Lógica Financiera: Solo si es transferencia
-    if (method === 'transfer' && accountId) {
-      // Buscamos categoría de ingresos (ej: 'Domicilios')
-      const { data: inCategories } = await supabase
-        .from('categories')
+    if (method === 'cash') {
+      const { data: cashAccount } = await supabase
+        .from('accounts')
         .select('id')
         .eq('user_id', user.id)
-        .eq('type', 'income')
-        .limit(1);
+        .eq('type', 'cash')
+        .eq('is_active', true)
+        .limit(1)
+        .single();
 
-      const tx = await financeService.createTransaction({
-        account_id: accountId,
-        category_id: inCategories?.[0]?.id || '', 
-        amount: amount,
-        type: 'income',
-        description: `Domicilio registrado $${amount}`,
-        transaction_date: new Date().toISOString()
-      });
-      financialTxId = tx.id;
+      if (!cashAccount) throw new Error('Crea una cuenta de tipo "Efectivo" en Finanzas.');
+      targetAccountId = cashAccount.id;
     }
 
-    // 1. Insertar el registro del Domicilio
+    if (!targetAccountId) throw new Error('Cuenta no definida.');
+
+    const { data: inCategories } = await supabase
+      .from('categories')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('type', 'income')
+      .limit(1);
+
+    const tx = await financeService.createTransaction({
+      account_id: targetAccountId,
+      category_id: inCategories?.[0]?.id || null, 
+      amount: amount,
+      type: 'income',
+      description: `Domicilio (${method === 'cash' ? 'Efectivo' : 'Transferencia'})`,
+      transaction_date: new Date().toISOString()
+    });
+
     const { data: delivery, error: dError } = await supabase
       .from('work_deliveries')
       .insert([{
         user_id: user.id,
         amount,
         payment_method: method,
-        // CORRECCIÓN PUNTUAL: Si es efectivo, el account_id es estrictamente nulo
-        account_id: method === 'transfer' ? (accountId || null) : null,
+        account_id: targetAccountId,
         package_id: activePackage?.id || null,
         commission_amount: commission,
         net_amount: net,
-        financial_transaction_id: financialTxId
+        financial_transaction_id: tx.id
       }])
       .select().single();
 
     if (dError) throw dError;
 
-    // 2. Si se usó un paquete, actualizamos su contador
     if (activePackage) {
       const newRemaining = activePackage.remaining_deliveries - 1;
       await supabase
@@ -150,31 +139,25 @@ export const workService = {
     return delivery;
   },
 
-  /**
-   * Obtiene el historial de domicilios filtrado por periodo.
-   */
   async getDeliveries(period: WorkPeriod) {
     let query = supabase
       .from('work_deliveries')
-      .select('*, accounts(name)')
+      .select('*, accounts(name, type)')
       .order('created_at', { ascending: false });
 
     const now = new Date();
     if (period === 'hoy') {
-      const startOfDay = new Date();
-      startOfDay.setHours(0, 0, 0, 0);
-      query = query.gte('created_at', startOfDay.toISOString());
+      const start = new Date(now.setHours(0,0,0,0)).toISOString();
+      query = query.gte('created_at', start);
     } else if (period === 'semana') {
-      const startOfWeek = new Date();
-      startOfWeek.setDate(now.getDate() - now.getDay());
-      startOfWeek.setHours(0, 0, 0, 0);
-      query = query.gte('created_at', startOfWeek.toISOString());
+      const start = new Date(now.setDate(now.getDate() - now.getDay())).toISOString();
+      query = query.gte('created_at', start);
     }
 
     const { data, error } = await query;
     if (error) throw error;
     
-    // Tipado del resultado incluyendo la relación con accounts
-    return data as (WorkDelivery & { accounts: { name: string } | null })[];
+    // Aquí es donde usamos el tipo WorkDelivery para que el aviso amarillo desaparezca
+    return data as (WorkDelivery & { accounts: { name: string, type: string } | null })[];
   }
 };
