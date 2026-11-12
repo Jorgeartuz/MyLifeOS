@@ -41,9 +41,10 @@ export const DeliveryModal = ({ isOpen, onClose, accounts, onSuccess }: Props) =
       
       onSuccess();
       onClose();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error(error);
-      alert(error.message || "Error al registrar el domicilio");
+      const message = error instanceof Error ? error.message : "Error al registrar el domicilio";
+      alert(message);
     } finally {
       setLoading(false);
     }
@@ -123,7 +124,6 @@ export const DeliveryModal = ({ isOpen, onClose, accounts, onSuccess }: Props) =
               >
                 <option value="">Selecciona cuenta...</option>
                 {accounts
-                  /* FILTRO CRÍTICO: No mostramos cuentas de tipo 'cash' en el flujo de transferencia */
                   .filter(acc => acc.type !== 'cash') 
                   .map(acc => (
                     <option key={acc.id} value={acc.id}>

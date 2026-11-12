@@ -1,17 +1,15 @@
-import { createClient } from '@supabase/supabase-js'
+import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
-const supabasePublishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
+const supabasePublishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || '';
 
-if (!supabaseUrl) {
-  throw new Error('Missing VITE_SUPABASE_URL')
-}
-
-if (!supabasePublishableKey) {
-  throw new Error('Missing VITE_SUPABASE_PUBLISHABLE_KEY')
+if (!supabaseUrl || !supabasePublishableKey) {
+  console.error(
+    '⚠️ Faltan variables de entorno para Supabase. Verifica tu archivo .env.local y configura VITE_SUPABASE_URL y VITE_SUPABASE_PUBLISHABLE_KEY (ver .env.example).'
+  );
 }
 
 export const supabase = createClient(
-  supabaseUrl,
-  supabasePublishableKey
-)
+  supabaseUrl || 'https://placeholder.supabase.co',
+  supabasePublishableKey || 'placeholder-anon-key'
+);

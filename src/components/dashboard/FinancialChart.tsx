@@ -1,24 +1,16 @@
-export const FinancialChart = () => {
-  // Gráfica mock manual usando SVG
-  return (
-    <div className="bg-surface p-6 rounded-card border border-border shadow-sm h-full">
-      <h3 className="font-bold text-text mb-6">Ingresos vs Gastos</h3>
-      <div className="relative h-48 w-full flex items-end gap-2">
-        {/* Esto es una representación visual simple de barras para no depender de librerías en esta fase */}
-        {[40, 70, 45, 90, 65, 80, 95].map((h, i) => (
-          <div key={i} className="flex-1 flex flex-col items-center gap-1 group">
-             <div className="w-full flex gap-1 items-end h-32">
-                <div className="flex-1 bg-primary/20 group-hover:bg-primary/40 transition-colors rounded-t-sm" style={{ height: `${h}%` }}></div>
-                <div className="flex-1 bg-red-400/20 group-hover:bg-red-400/40 transition-colors rounded-t-sm" style={{ height: `${h * 0.4}%` }}></div>
-             </div>
-             <span className="text-[10px] font-bold text-text-secondary mt-2">D{i+1}</span>
-          </div>
-        ))}
-      </div>
-      <div className="mt-6 flex gap-4 text-xs font-bold">
-        <div className="flex items-center gap-2"><div className="w-3 h-3 bg-primary rounded-full"></div> Ingresos</div>
-        <div className="flex items-center gap-2"><div className="w-3 h-3 bg-red-400 rounded-full"></div> Gastos</div>
-      </div>
+import { money } from '../../lib/life';
+
+export const FinancialChart = ({ income, expenses }: { income: number; expenses: number }) => {
+  const maximum = Math.max(income, expenses, 1);
+  return <div className="bg-surface p-6 rounded-card border border-border shadow-sm h-full">
+    <h3 className="font-bold text-text mb-6">Ingresos vs Gastos</h3>
+    <p className="text-xs text-text-secondary mb-6">Totales del período seleccionado</p>
+    <div className="space-y-6">
+      {[{ label: 'Ingresos', value: income, color: 'bg-primary' }, { label: 'Gastos', value: expenses, color: 'bg-red-400' }].map(item => <div key={item.label}>
+        <div className="flex flex-wrap justify-between gap-2 text-sm mb-2"><span>{item.label}</span><strong>{money(item.value)}</strong></div>
+        <div className="h-5 bg-background rounded-full overflow-hidden" role="img" aria-label={`${item.label}: ${money(item.value)}`}><div className={`h-full rounded-full ${item.color}`} style={{ width: `${item.value / maximum * 100}%` }} /></div>
+      </div>)}
+      {income === 0 && expenses === 0 && <p className="text-sm text-text-secondary">No hay movimientos en este período.</p>}
     </div>
-  );
+  </div>;
 };

@@ -15,7 +15,7 @@ export const MotorcycleStatus = ({ moto }: { moto: DashboardData['moto'] }) => (
       </div>
       <div className="p-3 bg-background rounded-lg border border-border">
         <p className="text-[10px] font-bold text-text-secondary uppercase tracking-wider">Próximo: {moto.nextMaintenance}</p>
-        <p className="text-sm font-bold text-primary mt-1">Faltan {(moto.nextMaintenanceKm - moto.kilometers).toLocaleString()} km</p>
+        <p className="text-sm font-bold text-primary mt-1">{moto.nextMaintenanceKm == null ? 'Sin fecha por kilometraje' : moto.nextMaintenanceKm <= moto.kilometers ? 'Mantenimiento pendiente' : `Faltan ${(moto.nextMaintenanceKm - moto.kilometers).toLocaleString('es-CO')} km`}</p>
       </div>
     </div>
   </div>

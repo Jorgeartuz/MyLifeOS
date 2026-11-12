@@ -40,13 +40,13 @@ const Trabajo = () => {
     let isMounted = true;
     const executeLoad = async () => {
       if (isMounted) {
-        if (deliveries.length > 0) setLoading(true);
+        setLoading(true);
         await loadData();
       }
     };
     executeLoad();
     return () => { isMounted = false; };
-  }, [loadData, deliveries.length]);
+  }, [loadData]);
 
   // Cálculos de Resumen (Totales por método de pago)
   const summary = deliveries.reduce((acc, d) => ({
@@ -153,7 +153,6 @@ const Trabajo = () => {
                     <div>
                       <p className="text-sm font-bold text-text">${Number(d.amount).toLocaleString('es-CO')}</p>
                       <p className="text-[10px] text-text-secondary font-bold uppercase mt-0.5 tracking-tighter">
-                        {/* Lógica de visualización corregida: Priorizar Efectivo */}
                         {d.payment_method === 'cash' ? (
                           <span className="text-orange-600 font-black">Efectivo</span>
                         ) : (

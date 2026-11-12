@@ -49,9 +49,47 @@ export const financeService = {
     return data as Transaction[];
   },
 
+  async getTransactionsByDateRange(startDate: string, endDate?: string) {
+    let query = supabase
+      .from('transactions')
+      .select(`
+        *,
+        categories (name, icon),
+        accounts (name)
+      `)
+      .gte('transaction_date', startDate)
+      .order('transaction_date', { ascending: false });
+
+    if (endDate) {
+      query = query.lte('transaction_date', endDate);
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+    return data as Transaction[];
+  },
+
+  async getFinancialTotals() {
+    const { data, error } = await supabase
+      .from('transactions')
+      .select('type, amount');
+
+    if (error) throw error;
+
+    const income = (data || [])
+      .filter((t) => t.type === 'income')
+      .reduce((sum, t) => sum + Number(t.amount), 0);
+
+    const expenses = (data || [])
+      .filter((t) => t.type === 'expense')
+      .reduce((sum, t) => sum + Number(t.amount), 0);
+
+    return { income, expenses };
+  },
+
   async createTransaction(payload: {
     account_id: string;
-    category_id: string;
+    category_id: string | null;
     amount: number;
     type: TransactionType;
     description: string;
@@ -59,23 +97,27 @@ export const financeService = {
   }) {
     const { data: { user } } = await supabase.auth.getUser();
     
-    // 1. Obtener saldo actual de la cuenta
-    const { data: account } = await supabase
+    // 1. Obtener saldo actual y tipo de la cuenta
+    const { data: account, error: accError } = await supabase
       .from('accounts')
-      .select('balance')
+      .select('id, balance, type')
       .eq('id', payload.account_id)
       .single();
 
-    if (!account) throw new Error("Cuenta no encontrada");
+    if (accError || !account) throw new Error("Cuenta no encontrada");
 
     // 2. Calcular nuevo saldo
+    const currentBalance = Number(account.balance) || 0;
     const newBalance = payload.type === 'income' 
-      ? account.balance + payload.amount 
-      : account.balance - payload.amount;
+      ? currentBalance + payload.amount 
+      : currentBalance - payload.amount;
 
-    if (newBalance < 0) throw new Error("Saldo insuficiente en la cuenta");
+    // Se permite saldo negativo si la cuenta es tarjeta de crédito
+    if (newBalance < 0 && account.type !== 'credit_card') {
+      throw new Error("Saldo insuficiente en la cuenta seleccionada");
+    }
 
-    // 3. Insertar transacción y actualizar cuenta (en orden)
+    // 3. Insertar transacción
     const { data: transaction, error: tError } = await supabase
       .from('transactions')
       .insert([{ ...payload, user_id: user?.id }])
@@ -83,18 +125,31 @@ export const financeService = {
 
     if (tError) throw tError;
 
+    // 4. Actualizar saldo de cuenta
     const { error: aError } = await supabase
       .from('accounts')
       .update({ balance: newBalance })
       .eq('id', payload.account_id);
 
-    if (aError) throw aError;
+    if (aError) {
+      // Revertir inserción de transacción si falla la actualización de saldo
+      await supabase.from('transactions').delete().eq('id', transaction.id);
+      throw aError;
+    }
 
-    return transaction;
+    return transaction as Transaction;
   },
 
   async deleteTransaction(transaction: Transaction) {
-    // 1. Revertir el saldo en la cuenta
+    // 1. Eliminar primero la transacción para garantizar integridad referencial
+    const { error: tError } = await supabase
+      .from('transactions')
+      .delete()
+      .eq('id', transaction.id);
+    
+    if (tError) throw tError;
+
+    // 2. Revertir el saldo en la cuenta
     const { data: account } = await supabase
       .from('accounts')
       .select('balance')
@@ -102,22 +157,15 @@ export const financeService = {
       .single();
 
     if (account) {
+      const currentBalance = Number(account.balance) || 0;
       const restoredBalance = transaction.type === 'income'
-        ? account.balance - transaction.amount
-        : account.balance + transaction.amount;
+        ? currentBalance - Number(transaction.amount)
+        : currentBalance + Number(transaction.amount);
 
       await supabase
         .from('accounts')
         .update({ balance: restoredBalance })
         .eq('id', transaction.account_id);
     }
-
-    // 2. Eliminar
-    const { error } = await supabase
-      .from('transactions')
-      .delete()
-      .eq('id', transaction.id);
-    
-    if (error) throw error;
   }
 };

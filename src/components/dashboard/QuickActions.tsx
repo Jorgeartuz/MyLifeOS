@@ -1,4 +1,5 @@
 import { PlusCircle, MinusCircle, Play, Navigation, Wrench, Target } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 export const QuickActions = () => {
   const actions = [
@@ -9,18 +10,20 @@ export const QuickActions = () => {
     { label: 'Moto', icon: <Wrench />, color: 'bg-purple-50 text-purple-600 border-purple-100' },
     { label: 'Meta', icon: <Target />, color: 'bg-gray-50 text-gray-600 border-gray-100' },
   ];
+  const destinations = ['/finanzas', '/finanzas', '/trabajo', '/moto', '/moto', '/metas'];
 
   return (
     <div className="grid grid-cols-3 gap-3 mb-8">
       {actions.map((action, i) => (
-        <button
+        <Link
           key={i}
+          to={destinations[i]}
           className={`flex flex-col items-center justify-center p-3 rounded-card border transition-all hover:scale-[1.02] active:scale-95 ${action.color}`}
           aria-label={`Acción rápida: ${action.label}`}
         >
           {action.icon}
           <span className="text-[10px] font-bold uppercase mt-2 tracking-tight">{action.label}</span>
-        </button>
+        </Link>
       ))}
     </div>
   );

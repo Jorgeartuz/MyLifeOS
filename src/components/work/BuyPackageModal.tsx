@@ -36,10 +36,10 @@ export const BuyPackageModal = ({ isOpen, onClose, accounts, onSuccess }: Props)
       await workService.buyPackage(pkg.size, pkg.price, accountId);
       onSuccess();
       onClose();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error(error);
-      // Esto te dirá si es por saldo insuficiente o por otra razón
-      alert(error.message || "Error al comprar paquete");
+      const message = error instanceof Error ? error.message : "Error al comprar paquete";
+      alert(message);
     } finally {
       setLoading(false);
     }

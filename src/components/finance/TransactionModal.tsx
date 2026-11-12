@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { X, Loader2 } from 'lucide-react';
 import type { Account, Category, TransactionType } from '../../types/finance';
 
-// Definimos la interfaz para los datos que se envían
 interface TransactionPayload {
   account_id: string;
   category_id: string;
@@ -18,7 +17,7 @@ interface Props {
   accounts: Account[];
   categories: Category[];
   onSuccess: () => void;
-  onSubmit: (data: TransactionPayload) => Promise<void>; // TIPADO AQUÍ
+  onSubmit: (data: TransactionPayload) => Promise<void>;
 }
 
 export const TransactionModal = ({ isOpen, onClose, accounts, categories, onSubmit, onSuccess }: Props) => {
@@ -43,17 +42,21 @@ export const TransactionModal = ({ isOpen, onClose, accounts, categories, onSubm
 
     setLoading(true);
     try {
+      // Ajuste para evitar desfase de día por conversión UTC a medianoche
+      const [year, month, day] = date.split('-').map(Number);
+      const targetDate = new Date(year, month - 1, day, 12, 0, 0);
+
       await onSubmit({
         account_id: accountId,
         category_id: categoryId,
         amount: Number(amount),
         type,
         description,
-        transaction_date: new Date(date).toISOString(),
+        transaction_date: targetDate.toISOString(),
       });
       onSuccess();
       onClose();
-    } catch (error: unknown) { // CAMBIADO A UNKNOWN
+    } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "Error al registrar la transacción";
       alert(message);
     } finally {

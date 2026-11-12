@@ -53,7 +53,7 @@ export interface DashboardData {
     kilometers: number;
     status: 'Operativa' | 'Mantenimiento';
     nextMaintenance: string;
-    nextMaintenanceKm: number;
+    nextMaintenanceKm: number | null;
     lastMaintenanceKm: number;
   };
   goal: {

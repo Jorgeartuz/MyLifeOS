@@ -2,6 +2,7 @@ import { type ReactNode } from 'react';
 import { 
   ArrowUpRight, 
   ArrowDownRight, 
+  Minus,
   Wallet, 
   TrendingUp, 
   TrendingDown, 
@@ -18,7 +19,6 @@ interface FinancialOverviewProps {
   };
 }
 
-// Interfaz para corregir el error de "any"
 interface MetricCardProps {
   metric: FinancialMetric;
   icon: ReactNode;
@@ -66,7 +66,8 @@ export const FinancialOverview = ({ metrics }: FinancialOverviewProps) => {
 };
 
 const MetricCard = ({ metric, icon, color, bg }: MetricCardProps) => {
-  const isPositive = metric.trend === 'up';
+  const isUp = metric.trend === 'up';
+  const isDown = metric.trend === 'down';
 
   return (
     <div className="bg-surface p-6 rounded-card border border-border shadow-sm transition-all hover:border-primary/30 group">
@@ -74,8 +75,10 @@ const MetricCard = ({ metric, icon, color, bg }: MetricCardProps) => {
         <div className={`p-2 rounded-lg ${bg} ${color} group-hover:scale-110 transition-transform`}>
           {icon}
         </div>
-        <div className={`flex items-center gap-0.5 text-xs font-bold ${isPositive ? 'text-green-600' : 'text-red-600'}`}>
-          {isPositive ? <ArrowUpRight size={14}/> : <ArrowDownRight size={14}/>}
+        <div className={`flex items-center gap-0.5 text-xs font-bold ${
+          isUp ? 'text-green-600' : isDown ? 'text-red-600' : 'text-text-secondary'
+        }`}>
+          {isUp ? <ArrowUpRight size={14}/> : isDown ? <ArrowDownRight size={14}/> : <Minus size={14}/>}
           {Math.abs(metric.change)}%
         </div>
       </div>

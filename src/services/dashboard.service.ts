@@ -2,11 +2,11 @@ import { supabase } from '../lib/supabase';
 import { financeService } from './finance.service';
 import { workService } from './work.service';
 import { goalsService } from './goals.service';
+import { lifeService } from './life.service';
 import type { WorkPeriod, WorkDelivery } from '../types/work';
 import type { Account, Transaction } from '../types/finance';
 import type { SavingsGoal } from '../types/goals';
 
-// Definimos la forma del acumulador para que TypeScript no se queje
 interface WorkAccumulator {
   income: number;
   deliveries: number;
@@ -14,48 +14,79 @@ interface WorkAccumulator {
   minutes: number;
 }
 
+const getPeriodStartDate = (period: WorkPeriod): string => {
+  const now = new Date();
+  if (period === 'hoy') {
+    return new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0).toISOString();
+  }
+  if (period === 'semana') {
+    const day = now.getDay();
+    const diff = now.getDate() - day + (day === 0 ? -6 : 1);
+    return new Date(now.getFullYear(), now.getMonth(), diff, 0, 0, 0, 0).toISOString();
+  }
+  if (period === 'mes') {
+    return new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0).toISOString();
+  }
+  return new Date(0).toISOString();
+};
+
 export const dashboardService = {
   async getDashboardData(period: WorkPeriod) {
-    const [accounts, transactions, deliveries, goals, { data: profile }] = await Promise.all([
+    const startDate = getPeriodStartDate(period);
+
+    const [accounts, periodTransactions, recentTransactions, deliveries, goals, motorcycle, userProfile] = await Promise.all([
       financeService.getAccounts(),
+      financeService.getTransactionsByDateRange(startDate),
       financeService.getTransactions(5),
       workService.getDeliveries(period),
       goalsService.getGoals(),
-      supabase.from('profiles').select('full_name').single()
+      lifeService.getMoto(),
+      supabase.auth.getUser().then(async ({ data: { user } }) => {
+        if (!user) return null;
+        const { data } = await supabase
+          .from('profiles')
+          .select('full_name')
+          .eq('id', user.id)
+          .maybeSingle();
+        return { full_name: user.user_metadata.full_name || data?.full_name };
+      })
     ]);
 
-    const totalBalance = (accounts as Account[]).reduce((acc: number, curr: Account) => acc + Number(curr.balance), 0);
+    const totalBalance = (accounts as Account[]).reduce(
+      (acc: number, curr: Account) => acc + (Number(curr.balance) || 0),
+      0
+    );
     
-    const periodIncome = (transactions as Transaction[])
+    const periodIncome = (periodTransactions as Transaction[])
       .filter((t: Transaction) => t.type === 'income')
-      .reduce((acc: number, curr: Transaction) => acc + Number(curr.amount), 0);
+      .reduce((acc: number, curr: Transaction) => acc + (Number(curr.amount) || 0), 0);
       
-    const periodExpenses = (transactions as Transaction[])
+    const periodExpenses = (periodTransactions as Transaction[])
       .filter((t: Transaction) => t.type === 'expense')
-      .reduce((acc: number, curr: Transaction) => acc + Number(curr.amount), 0);
+      .reduce((acc: number, curr: Transaction) => acc + (Number(curr.amount) || 0), 0);
 
-    // 2. Cálculos de Trabajo (Acumulador tipado para eliminar el error rojo)
-    const workStats = (deliveries as WorkDelivery[]).reduce((acc: WorkAccumulator, d: WorkDelivery) => ({
-      income: acc.income + Number(d.net_amount),
-      deliveries: acc.deliveries + 1,
-      kilometers: acc.kilometers + 0, 
-      minutes: acc.minutes + 0 
-    }), { income: 0, deliveries: 0, kilometers: 0, minutes: 0 });
+    // Cálculos de Trabajo
+    const workStats = (deliveries as WorkDelivery[]).reduce(
+      (acc: WorkAccumulator, d: WorkDelivery) => ({
+        income: acc.income + (Number(d.net_amount) || 0),
+        deliveries: acc.deliveries + 1,
+        kilometers: acc.kilometers, 
+        minutes: acc.minutes 
+      }),
+      { income: 0, deliveries: 0, kilometers: 0, minutes: 0 }
+    );
 
-    // 3. Cálculos de Moto (Usamos '_' para decirle a TS que ignoramos el segundo parámetro)
-    const baseKm = 43205;
-    const totalKmEver = (deliveries as WorkDelivery[]).reduce((acc: number) => acc + 0, 0);
-    const currentMotoKm = baseKm + totalKmEver;
+    // Cálculos de Moto (con base referencial mientras se implementa el módulo de odómetro)
 
     return {
       user: {
-        firstName: profile?.full_name?.split(' ')[0] || 'Usuario'
+        firstName: userProfile?.full_name?.split(' ')[0] || 'Usuario'
       },
       finances: {
         balance: totalBalance,
         income: periodIncome,
         expenses: periodExpenses,
-        recentTransactions: transactions as Transaction[]
+        recentTransactions: recentTransactions as Transaction[]
       },
       work: {
         income: workStats.income,
@@ -65,10 +96,7 @@ export const dashboardService = {
         fuelCost: 0,
         otherCosts: 0
       },
-      moto: {
-        kilometers: currentMotoKm,
-        nextMaintenanceKm: 44000
-      },
+      moto: motorcycle.moto,
       goal: (goals as SavingsGoal[]).length > 0 ? goals[0] : null
     };
   }

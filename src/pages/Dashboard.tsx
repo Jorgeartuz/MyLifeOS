@@ -14,6 +14,10 @@ import { type WorkPeriod } from '../types/work';
 import { type Transaction } from '../types/finance';
 import { type SavingsGoal } from '../types/goals';
 import { Loader2 } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import type { Motorcycle } from '../types/life';
+import { errorMessage } from '../lib/life';
+import { Feedback } from '../components/ui/Module';
 
 interface DashboardSummary {
   user: { firstName: string };
@@ -31,10 +35,7 @@ interface DashboardSummary {
     fuelCost: number;
     otherCosts: number;
   };
-  moto: {
-    kilometers: number;
-    nextMaintenanceKm: number;
-  };
+  moto: Motorcycle | null;
   goal: SavingsGoal | null;
 }
 
@@ -42,6 +43,7 @@ const Dashboard = () => {
   const [period, setPeriod] = useState<WorkPeriod>('semana');
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<DashboardSummary | null>(null);
+  const [error, setError] = useState('');
   
   // 2. Usamos una referencia para rastrear el primer renderizado
   const isFirstRender = useRef(true);
@@ -50,8 +52,10 @@ const Dashboard = () => {
     try {
       const result = await dashboardService.getDashboardData(period);
       setData(result);
+      setError('');
     } catch (error) {
       console.error("Error al cargar Dashboard:", error);
+      setError(errorMessage(error));
     } finally {
       setLoading(false);
     }
@@ -90,7 +94,7 @@ const Dashboard = () => {
     );
   }
 
-  if (!data) return null;
+  if (!data) return <div className="space-y-4"><Feedback error={error} /><button className="module-button" onClick={loadDashboard}>Volver a intentar</button></div>;
 
   const financialMetrics = {
     available: data.finances.balance,
@@ -101,6 +105,7 @@ const Dashboard = () => {
 
   return (
     <div className="animate-in fade-in duration-500 pb-10">
+      <Feedback error={error} />
       <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
         <DashboardHeader name={data.user.firstName} />
         <PeriodSelector period={period} onChange={setPeriod} />
@@ -111,7 +116,7 @@ const Dashboard = () => {
           <FinancialOverview metrics={financialMetrics} />
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <FinancialChart />
+            <FinancialChart income={data.finances.income} expenses={data.finances.expenses} />
             <WorkOverview data={data.work} />
           </div>
 
@@ -124,14 +129,14 @@ const Dashboard = () => {
             <QuickActions />
           </section>
           
-          <MotorcycleStatus moto={{
-            model: 'AKT CR4 125',
-            kilometers: data.moto.kilometers,
+          {data.moto ? <MotorcycleStatus moto={{
+            model: data.moto.model,
+            kilometers: Number(data.moto.odometer),
             status: 'Operativa',
             nextMaintenance: 'Cambio de Aceite',
-            nextMaintenanceKm: data.moto.nextMaintenanceKm,
-            lastMaintenanceKm: 41500
-          }} />
+            nextMaintenanceKm: data.moto.next_maintenance_km,
+            lastMaintenanceKm: 0
+          }} /> : <Link to="/moto" className="block bg-surface p-6 rounded-card border border-border text-primary">Registra tu moto para ver su estado.</Link>}
 
           {data.goal ? (
             <GoalProgress goal={{

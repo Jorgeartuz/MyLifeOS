@@ -12,6 +12,7 @@ const Finanzas = () => {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [totals, setTotals] = useState({ income: 0, expenses: 0 });
   const [loading, setLoading] = useState(true);
   const [isAccModalOpen, setIsAccModalOpen] = useState(false);
   const [isTxModalOpen, setIsTxModalOpen] = useState(false);
@@ -19,14 +20,16 @@ const Finanzas = () => {
   // Función de carga de datos estable
   const loadData = useCallback(async () => {
     try {
-      const [accs, cats, txs] = await Promise.all([
+      const [accs, cats, txs, tot] = await Promise.all([
         financeService.getAccounts(),
         financeService.getCategories(),
-        financeService.getTransactions()
+        financeService.getTransactions(),
+        financeService.getFinancialTotals()
       ]);
       setAccounts(accs);
       setCategories(cats);
       setTransactions(txs);
+      setTotals(tot);
     } catch (error) {
       console.error('Error al cargar datos:', error);
     } finally {
@@ -34,11 +37,7 @@ const Finanzas = () => {
     }
   }, []);
 
-  // SOLUCIÓN AL LINTER: 
-  // 1. No llamamos a loadData() directamente si esta modifica el estado síncronamente.
-  // 2. El loading inicial ya es true, así que no necesitamos setLoading(true) dentro de un efecto inicial.
   useEffect(() => {
-    // Usamos una variable para evitar actualizaciones si el componente se desmonta
     let isMounted = true;
 
     const executeLoad = async () => {
@@ -54,9 +53,9 @@ const Finanzas = () => {
     };
   }, [loadData]);
 
-  const totalBalance = accounts.reduce((acc, curr) => acc + Number(curr.balance), 0);
-  const totalIncome = transactions.filter(t => t.type === 'income').reduce((acc, curr) => acc + Number(curr.amount), 0);
-  const totalExpenses = transactions.filter(t => t.type === 'expense').reduce((acc, curr) => acc + Number(curr.amount), 0);
+  const totalBalance = accounts.reduce((acc, curr) => acc + (Number(curr.balance) || 0), 0);
+  const totalIncome = totals.income;
+  const totalExpenses = totals.expenses;
 
   if (loading) return (
     <div className="flex flex-col h-[60vh] items-center justify-center text-text-secondary">

@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { financeService } from './finance.service';
 import { type SavingsGoal } from '../types/goals';
 
 export const goalsService = {
@@ -15,8 +16,10 @@ export const goalsService = {
 
     return data.map(goal => ({
       ...goal,
-      // Tipamos 'c' como un objeto que contiene amount en lugar de usar any
-      current_amount: goal.goal_contributions?.reduce((sum: number, c: { amount: number | string }) => sum + Number(c.amount), 0) || 0
+      current_amount: goal.goal_contributions?.reduce(
+        (sum: number, c: { amount: number | string }) => sum + Number(c.amount),
+        0
+      ) || 0
     })) as SavingsGoal[];
   },
 
@@ -45,28 +48,53 @@ export const goalsService = {
     notes?: string | null;
   }) {
     const { data: { user } } = await supabase.auth.getUser();
-    
-    const { error: contribError } = await supabase
-      .from('goal_contributions')
-      .insert([{
-        ...payload,
-        user_id: user?.id,
-        contribution_date: new Date().toISOString()
-      }]);
+    if (!user) throw new Error('No hay usuario autenticado');
 
-    if (contribError) throw contribError;
+    // 1. Obtener nombre de la meta
+    const { data: goal } = await supabase
+      .from('savings_goals')
+      .select('name')
+      .eq('id', payload.goal_id)
+      .maybeSingle();
 
-    const { data: account } = await supabase
-      .from('accounts')
-      .select('balance')
-      .eq('id', payload.account_id)
-      .single();
+    const goalName = goal?.name || 'Meta de Ahorro';
 
-    if (account) {
-      await supabase
-        .from('accounts')
-        .update({ balance: Number(account.balance) - payload.amount })
-        .eq('id', payload.account_id);
+    // 2. Buscar categoría de ahorro si existe
+    const { data: categories } = await supabase
+      .from('categories')
+      .select('id, name')
+      .eq('user_id', user.id)
+      .eq('type', 'expense');
+
+    const savingCat = categories?.find(c => 
+      c.name.toLowerCase().includes('ahorro') || 
+      c.name.toLowerCase().includes('meta')
+    );
+
+    // 3. Crear transacción financiera para debitar la cuenta y que quede en el historial
+    const tx = await financeService.createTransaction({
+      account_id: payload.account_id,
+      category_id: savingCat ? savingCat.id : (categories?.[0]?.id || null),
+      amount: payload.amount,
+      type: 'expense',
+      description: `Aporte a meta: ${goalName}${payload.notes ? ` (${payload.notes})` : ''}`,
+      transaction_date: new Date().toISOString()
+    });
+
+    try {
+      const { error: contribError } = await supabase
+        .from('goal_contributions')
+        .insert([{
+          ...payload,
+          user_id: user.id,
+          contribution_date: new Date().toISOString()
+        }]);
+
+      if (contribError) throw contribError;
+    } catch (err) {
+      // Revertir la transacción si falla la inserción de la contribución
+      await financeService.deleteTransaction(tx);
+      throw err;
     }
   }
 };
