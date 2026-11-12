@@ -35,7 +35,7 @@ interface DashboardSummary {
     fuelCost: number;
     otherCosts: number;
   };
-  moto: Motorcycle | null;
+  moto: (Motorcycle & { next_service_name?: string }) | null;
   goal: SavingsGoal | null;
 }
 
@@ -133,7 +133,7 @@ const Dashboard = () => {
             model: data.moto.model,
             kilometers: Number(data.moto.odometer),
             status: 'Operativa',
-            nextMaintenance: 'Cambio de Aceite',
+            nextMaintenance: data.moto.next_service_name || 'Mantenimiento programado',
             nextMaintenanceKm: data.moto.next_maintenance_km,
             lastMaintenanceKm: 0
           }} /> : <Link to="/moto" className="block bg-surface p-6 rounded-card border border-border text-primary">Registra tu moto para ver su estado.</Link>}

@@ -24,11 +24,14 @@ export interface Debt {
   due_date: string | null;
   notes: string;
   debt_payments: DebtPayment[];
+  annual_interest_rate?: number;
+  minimum_payment?: number;
 }
 export interface DebtPayment {
   id: string;
   amount: number;
   paid_on: string;
+  financial_transaction_id?: string;
 }
 export interface CalendarEvent {
   id: string;

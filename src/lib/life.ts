@@ -7,7 +7,7 @@ export const today = () => {
 export const money = (amount: number) => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(amount);
 export const dateLabel = (date: string) => new Date(`${date.slice(0, 10)}T12:00:00`).toLocaleDateString('es-CO');
 export const errorMessage = (error: unknown) => {
-  if (error && typeof error === 'object' && 'code' in error && ['42P01', 'PGRST205', 'PGRST202'].includes(String(error.code))) return 'Falta actualizar la base de datos. Aplica la migración de MyLifeOs en Supabase y vuelve a intentar.';
+  if (error && typeof error === 'object' && 'code' in error && ['42P01', '42703', 'PGRST204', 'PGRST205', 'PGRST202'].includes(String(error.code))) return 'Falta actualizar la base de datos. Aplica la migración de MyLifeOs en Supabase y vuelve a intentar.';
   if (error && typeof error === 'object' && 'message' in error) return String(error.message);
   return 'No se pudo completar la operación. Intenta nuevamente.';
 };

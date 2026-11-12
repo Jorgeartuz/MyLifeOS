@@ -72,3 +72,94 @@ test('Wrong current password prevents changing account credentials', async () =>
   });
   await assert.rejects(settingsService.changePassword('new-password', 'wrong', 'a@example.com'), /actual no es correcta/);
 });
+
+const planning = load('src/lib/planning.ts', { './life': { debtRemaining } });
+const servicePlan = (overrides = {}) => ({ id: 'p1', motorcycle_id: 'm1', name: 'Aceite', interval_km: 2000, last_service_km: 43000, last_service_date: '2026-11-12', estimated_cost: 50000, active: true, ...overrides });
+test('Oil change automatically forecasts 45000 km and twenty calendar days at 100 km/day', () => {
+  const [next] = planning.maintenanceForecast([servicePlan()], 43000, 100, '2026-11-12');
+  assert.equal(next.nextKm, 45000);
+  assert.equal(next.remainingKm, 2000);
+  assert.equal(next.days, 20);
+  assert.equal(next.estimatedDate, '2026-12-02');
+  assert.equal(next.dailyProvision, 2500);
+});
+test('Forecast uses current odometer, supports overdue services and no mileage estimate', () => {
+  assert.equal(planning.maintenanceForecast([servicePlan()], 44000, 100, '2026-11-12')[0].days, 10);
+  assert.equal(planning.maintenanceForecast([servicePlan()], 46000, 100, '2026-11-12')[0].estimatedDate, '2026-11-12');
+  assert.equal(planning.maintenanceForecast([servicePlan()], 43000, 0, '2026-11-12')[0].estimatedDate, null);
+  assert.equal(planning.maintenanceForecast([servicePlan({ active: false })], 43000, 100, '2026-11-12').length, 0);
+});
+test('Real mileage requires a week of readings and includes rest days', () => {
+  assert.deepEqual(planning.dailyMileage([{ reading_date: '2026-11-12', odometer: 43000 }], 100), { km: 100, source: 'manual' });
+  assert.deepEqual(planning.dailyMileage([{ reading_date: '2026-11-05', odometer: 42300 }, { reading_date: '2026-11-12', odometer: 43000 }], 50), { km: 100, source: 'readings' });
+  assert.equal(planning.dailyMileage([{ reading_date: '2026-11-05', odometer: 43000 }, { reading_date: '2026-11-12', odometer: 43000 }], 100).km, 0);
+});
+test('Provision sums wear and allocates the fund once across imminent services', () => {
+  const plans = planning.maintenanceForecast([servicePlan({ estimated_cost: 50000 }), servicePlan({ id: 'p2', estimated_cost: 50000 })], 44900, 100, '2026-11-12');
+  assert.equal(planning.motoProvision(plans, 50000), 52500);
+});
+test('Daily debt cap respects living costs, moto provision, account buffer and no income days', () => {
+  const input = { income: 100000, essentials: 40000, spent: 0, debtPaid: 0, motoNeeded: 10000, motoFunded: 0, percent: 20, liquid: 100000, buffer: 20000 };
+  assert.equal(planning.dailyBudget(input).debt, 18000);
+  assert.equal(planning.dailyBudget(input).forYou, 72000);
+  assert.equal(planning.dailyBudget({ ...input, liquid: 25000 }).debt, 0);
+  assert.equal(planning.dailyBudget({ ...input, liquid: 5000, buffer: 0 }).debt, 0);
+  assert.equal(planning.dailyBudget({ ...input, income: 0 }).debt, 0);
+  assert.equal(planning.dailyBudget({ ...input, spent: 95000 }).debt, 0);
+  assert.equal(planning.dailyBudget({ ...input, essentials: 100000 }).provision, 0);
+});
+test('Already funded moto provision and debt paid cannot be suggested twice on refresh', () => {
+  const input = { income: 100000, essentials: 40000, spent: 0, debtPaid: 18000, motoNeeded: 10000, motoFunded: 10000, percent: 20, liquid: 72000, buffer: 0 };
+  assert.equal(planning.dailyBudget(input).debt, 0);
+  assert.equal(planning.dailyBudget(input).provision, 0);
+});
+test('Minimums are covered before highest-interest extras; allocations never exceed budget', () => {
+  const debts = [debt({ id: 'low', original_amount: 100000, annual_interest_rate: 0, minimum_payment: 3000, due_date: '2026-11-12' }), debt({ id: 'high', original_amount: 200000, annual_interest_rate: 30 })];
+  const allocation = planning.allocateDebts(debts, 10000, 'avalanche', '2026-11-12');
+  assert.equal(allocation.rows[0].debt.id, 'high');
+  assert.equal(allocation.rows.find(r => r.debt.id === 'low').amount, 3000);
+  assert.equal(allocation.rows.reduce((s,r) => s+r.amount,0), 10000);
+  assert.equal(planning.allocateDebts(debts, 1000, 'avalanche', '2026-11-12').minimumShortfall, 2000);
+  assert.equal(planning.allocateDebts(debts, 10000, 'snowball', '2026-11-12').rows[0].debt.id, 'low');
+});
+test('Debt projections roll paid-off allocations forward, include interest, and handle non-amortizing budgets', () => {
+  assert.equal(planning.payoffProjection([debt({ original_amount: 100000 })], 10000, 'avalanche', '2026-11-12').days, 10);
+  assert.equal(planning.payoffProjection([debt({ original_amount: 100000 })], 0, 'avalanche', '2026-11-12'), null);
+  assert.ok(planning.payoffProjection([debt({ original_amount: 100000, annual_interest_rate: 30 })], 10000, 'avalanche', '2026-11-12').days > 10);
+  assert.equal(planning.payoffProjection([debt({ original_amount: 100000, annual_interest_rate: 30 })], 1, 'avalanche', '2026-11-12'), null);
+});
+test('Snapshot excludes reserve refunds from earnings and debt payments from living expenses', () => {
+  const snapshot = planning.planningSnapshot({
+    settings: { ...planning.defaultSettings, daily_essentials: 40000 }, plans: [], readings: [], fund: { balance: 10000 }, moto: null,
+    debts: [debt({ debt_payments: [{ amount: 20000, paid_on: '2026-11-12', financial_transaction_id: 'payment' }] })],
+    accounts: [{ type: 'cash', balance: 100000 }],
+    transactions: [
+      { id: 'income', type: 'income', amount: 100000, transaction_date: '2026-11-12T12:00:00-05:00' },
+      { id: 'refund', type: 'income', source: 'moto_reserve_refund', amount: 50000, transaction_date: '2026-11-12T12:00:00-05:00' },
+      { id: 'payment', type: 'expense', amount: 20000, transaction_date: '2026-11-12T12:00:00-05:00' },
+    ],
+  }, '2026-11-12');
+  assert.equal(snapshot.budget.income, 100000);
+  assert.equal(snapshot.averageSpending, 0);
+  assert.equal(snapshot.budget.debt, 0);
+});
+
+test('Partial contribution does not reduce an imminent service shortfall twice', () => {
+  const snapshot = planning.planningSnapshot({
+    settings: { ...planning.defaultSettings }, plans: [servicePlan()], readings: [], fund: { balance: 25000 },
+    moto: { odometer: 44900 }, debts: [], accounts: [{ type: 'cash', balance: 175000 }],
+    transactions: [
+      { id: 'income', type: 'income', amount: 200000, transaction_date: '2026-11-12T12:00:00-05:00' },
+      { id: 'fund', type: 'expense', source: 'moto_reserve', amount: 25000, transaction_date: '2026-11-12T12:00:00-05:00' },
+    ],
+  }, '2026-11-12');
+  assert.equal(snapshot.budget.provision, 25000);
+});
+
+test('Finance RPC result accepts PostgREST row arrays as well as a singular object', async () => {
+  for (const result of [{ id: 'tx1' }, [{ id: 'tx1' }]]) {
+    const { financeService } = load('src/services/finance.service.ts', { '../lib/supabase': { supabase: { rpc: async () => ({ data: result, error: null }) } } });
+    const tx = await financeService.createTransaction({ account_id: 'a1', category_id: null, amount: 10, type: 'income', description: '', transaction_date: '2026-11-12' });
+    assert.equal(tx.id, 'tx1');
+  }
+});

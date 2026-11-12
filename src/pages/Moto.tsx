@@ -2,10 +2,12 @@ import { useState, type FormEvent } from 'react';
 import { Module, Panel, Field, SaveButton, Feedback } from '../components/ui/Module';
 import { useModule } from '../hooks/useModule';
 import { lifeService } from '../services/life.service';
+import { planningService } from '../services/planning.service';
+import { MotoPlanning } from '../components/finance/MotoPlanning';
 import { today, money, dateLabel, errorMessage } from '../lib/life';
 
 export default function Moto() {
-  const { data, loading, error, reload } = useModule(lifeService.getMoto);
+  const { data, loading, error, reload } = useModule(planningService.overview);
   const [busy, setBusy] = useState(false); const [message, setMessage] = useState(''); const [success, setSuccess] = useState('');
   const moto = data?.moto;
   async function save(e: FormEvent<HTMLFormElement>, maintenance = false) {
@@ -28,7 +30,7 @@ export default function Moto() {
     </div><SaveButton busy={busy}>Guardar moto</SaveButton></form>
     {moto?.next_maintenance_km != null && <p className="text-sm text-primary">{Number(moto.odometer) >= moto.next_maintenance_km ? 'Mantenimiento pendiente' : `Faltan ${(moto.next_maintenance_km - Number(moto.odometer)).toLocaleString('es-CO')} km para el mantenimiento`}</p>}
     {moto && [['SOAT', moto.soat_date], ['Tecnomecánica', moto.inspection_date]].map(([label, date]) => date && <p key={label} className={date < today() ? 'text-sm text-red-700' : 'text-sm text-text-secondary'}>{label}: {dateLabel(date)}{date < today() ? ' · Vencido' : ''}</p>)}
-    </Panel>{moto && <Panel title="Registrar mantenimiento"><form onSubmit={e => save(e, true)} className="space-y-4"><Field label="Servicio realizado"><input className="module-input" name="title" required maxLength={120} placeholder="Cambio de aceite" /></Field><div className="grid sm:grid-cols-3 gap-4"><Field label="Fecha"><input className="module-input" name="date" type="date" required defaultValue={today()} max={today()} /></Field><Field label="Kilometraje del servicio"><input className="module-input" name="km" type="number" min="0" step="1" required defaultValue={moto.odometer} /></Field><Field label="Costo (COP)"><input className="module-input" name="cost" type="number" min="0" step="0.01" required defaultValue="0" /></Field></div><Field label="Notas"><textarea className="module-input" name="notes" maxLength={2000} /></Field><p className="text-xs text-text-secondary">El costo queda en este historial. Registra el gasto en Finanzas para descontarlo de una cuenta.</p><SaveButton busy={busy}>Registrar servicio</SaveButton></form></Panel>}
+    </Panel>{moto && <MotoPlanning data={data} reload={reload} />}{moto && <Panel title="Servicio ocasional (sin recurrencia)"><form onSubmit={e => save(e, true)} className="space-y-4"><Field label="Servicio realizado"><input className="module-input" name="title" required maxLength={120} placeholder="Cambio de aceite" /></Field><div className="grid sm:grid-cols-3 gap-4"><Field label="Fecha"><input className="module-input" name="date" type="date" required defaultValue={today()} max={today()} /></Field><Field label="Kilometraje del servicio"><input className="module-input" name="km" type="number" min="0" step="1" required defaultValue={moto.odometer} /></Field><Field label="Costo (COP)"><input className="module-input" name="cost" type="number" min="0" step="0.01" required defaultValue="0" /></Field></div><Field label="Notas"><textarea className="module-input" name="notes" maxLength={2000} /></Field><p className="text-xs text-text-secondary">El costo queda en este historial. Registra el gasto en Finanzas para descontarlo de una cuenta.</p><SaveButton busy={busy}>Registrar servicio</SaveButton></form></Panel>}
     <Panel title="Historial">{data.history.length === 0 ? <p className="text-sm text-text-secondary">No hay mantenimientos registrados.</p> : data.history.map(item => <article key={item.id} className="border-b border-border pb-3"><div className="flex justify-between gap-3"><h3 className="font-bold">{item.title}</h3><span>{money(Number(item.cost))}</span></div><p className="text-sm text-text-secondary">{dateLabel(item.performed_on)} · {Number(item.odometer).toLocaleString('es-CO')} km</p><p className="text-sm whitespace-pre-wrap">{item.notes}</p></article>)}</Panel></>}
   </Module>;
 }

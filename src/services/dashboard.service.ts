@@ -3,6 +3,7 @@ import { financeService } from './finance.service';
 import { workService } from './work.service';
 import { goalsService } from './goals.service';
 import { lifeService } from './life.service';
+import { planningService } from './planning.service';
 import type { WorkPeriod, WorkDelivery } from '../types/work';
 import type { Account, Transaction } from '../types/finance';
 import type { SavingsGoal } from '../types/goals';
@@ -34,13 +35,14 @@ export const dashboardService = {
   async getDashboardData(period: WorkPeriod) {
     const startDate = getPeriodStartDate(period);
 
-    const [accounts, periodTransactions, recentTransactions, deliveries, goals, motorcycle, userProfile] = await Promise.all([
+    const [accounts, periodTransactions, recentTransactions, deliveries, goals, motorcycle, planning, userProfile] = await Promise.all([
       financeService.getAccounts(),
       financeService.getTransactionsByDateRange(startDate),
       financeService.getTransactions(5),
       workService.getDeliveries(period),
       goalsService.getGoals(),
       lifeService.getMoto(),
+      planningService.context(),
       supabase.auth.getUser().then(async ({ data: { user } }) => {
         if (!user) return null;
         const { data } = await supabase
@@ -76,7 +78,7 @@ export const dashboardService = {
       { income: 0, deliveries: 0, kilometers: 0, minutes: 0 }
     );
 
-    // Cálculos de Moto (con base referencial mientras se implementa el módulo de odómetro)
+    const nextService = planning.plans.filter(p => p.active).sort((a,b) => (Number(a.last_service_km) + Number(a.interval_km)) - (Number(b.last_service_km) + Number(b.interval_km)))[0];
 
     return {
       user: {
@@ -96,7 +98,10 @@ export const dashboardService = {
         fuelCost: 0,
         otherCosts: 0
       },
-      moto: motorcycle.moto,
+      moto: motorcycle.moto ? { ...motorcycle.moto,
+        next_maintenance_km: nextService ? Number(nextService.last_service_km) + Number(nextService.interval_km) : motorcycle.moto.next_maintenance_km,
+        next_service_name: nextService?.name || 'Mantenimiento programado',
+      } : null,
       goal: (goals as SavingsGoal[]).length > 0 ? goals[0] : null
     };
   }

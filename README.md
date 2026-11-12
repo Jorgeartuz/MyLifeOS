@@ -32,7 +32,7 @@ La migración no modifica las políticas de las tablas anteriores. Revisa que cu
 - **Trabajo:** domicilios en efectivo o transferencia, paquetes y comisión del 20 % sin paquete activo.
 - **Metas:** objetivos de ahorro y aportes desde cuentas.
 - **Moto:** una moto por usuario, kilometraje que no puede disminuir, vencimientos de SOAT/tecnomecánica e historial de servicios. Un servicio histórico no reduce el odómetro. Los costos del historial no descuentan cuentas automáticamente; registra el gasto en Finanzas cuando corresponda.
-- **Deudas:** registro del saldo pendiente inicial, acreedor, vencimiento, notas y abonos parciales/totales desde una cuenta. Crear una deuda no registra un ingreso. Los abonos sí generan gastos; no se permiten abonos superiores al pendiente. No calcula intereses ni amortizaciones.
+- **Deudas:** registro del saldo pendiente inicial, acreedor, vencimiento, notas y abonos parciales/totales desde una cuenta. Crear una deuda no registra un ingreso. Los abonos sí generan gastos; no se permiten abonos superiores al pendiente. Incluye una proyección ilustrativa con las tasas efectivas anuales y cuotas mínimas que registres; no modifica automáticamente el saldo del acreedor por intereses.
 - **Calendario:** vista mensual y agenda por día, crear/editar/completar/eliminar eventos. Muestra automáticamente vencimientos de deudas pendientes y documentos de la moto. Estos vencimientos se modifican desde su módulo de origen. No envía notificaciones fuera de la aplicación.
 - **Configuración:** nombre del perfil (metadatos de Supabase Auth), cambio de contraseña verificando la contraseña actual, creación y archivo de categorías, cierre de sesión. La moneda de la aplicación es COP.
 
@@ -44,7 +44,7 @@ npm test
 npm run build
 ```
 
-Las pruebas usan Node Test Runner y TypeScript, sin instalar otro framework. Cubren saldos pendientes con decimales, vencimientos automáticos, fechas locales, acceso sin sesión, contratos RPC y rechazo de contraseñas actuales incorrectas. Simulan el cliente Supabase: no sustituyen las pruebas contra una base real.
+Las pruebas usan Node Test Runner y TypeScript, sin instalar otro framework. Cubren saldos pendientes con decimales, vencimientos automáticos, fechas locales, acceso sin sesión, contratos RPC y rechazo de contraseñas actuales incorrectas. También ejecutan ambas migraciones contra PostgreSQL local con PGlite y prueban saldos, aislamiento RLS, reversión ante errores y servicios recurrentes. No sustituyen la verificación contra el esquema real de tu Supabase ni prueban concurrencia entre conexiones.
 
 Después de aplicar la migración, verifica con una cuenta de prueba:
 
@@ -54,7 +54,7 @@ Después de aplicar la migración, verifica con una cuenta de prueba:
 4. Actualizar el nombre y crear/archivar una categoría; comprobar los cambios en el encabezado y en Finanzas.
 5. Usar un segundo usuario y comprobar que no ve ni modifica datos del primero. Probar abonos simultáneos contra una misma deuda.
 
-Las funciones nuevas son atómicas, pero los servicios anteriores de Finanzas, Trabajo y Metas todavía realizan varias escrituras separadas y requieren una migración posterior para garantizar consistencia entre todos los flujos concurrentes.
+La segunda migración convierte las altas y reversiones de Finanzas en RPC con bloqueo de cuenta, compartido por los abonos y el apartado moto. Los flujos compuestos de Trabajo y Metas todavía usan compensaciones entre registros, por lo que no constituyen una sola transacción completa.
 
 ## Estructura
 
@@ -63,3 +63,20 @@ Las funciones nuevas son atómicas, pero los servicios anteriores de Finanzas, T
 ## Despliegue
 
 `npm run build` genera `dist`. Existe configuración de reescritura SPA en `vercel.json`. Configura también las variables `VITE_SUPABASE_*` y las URL permitidas de Supabase Auth en tu entorno de despliegue.
+## Planificación personal: segunda migración
+
+Ejecuta una vez `supabase/migrations/202611120002_personal_planning.sql` en el SQL Editor, después de la primera migración. No vuelvas a ejecutar la primera. Esta actualización es necesaria antes de usar los nuevos planes y registrar movimientos financieros con esta versión.
+
+Preferencias iniciales solicitadas: **20 % máximo para deudas**, después de la provisión de moto, y **100 km por día calendario**. Configura tu mínimo diario para vivir/trabajar y tu colchón de efectivo en Deudas. No se inventan esos importes: aparecen en cero con un aviso hasta que los completes.
+
+El plan diario usa ingresos realmente registrados hoy, protege el mayor entre tu mínimo diario y tus gastos ya registrados, descuenta lo ya abonado/apartado hoy, reserva el monto de la moto y limita las sugerencias al dinero disponible sin crédito. Las cuotas mínimas se atienden primero; el excedente sigue mayor interés o menor saldo. Las sugerencias requieren que confirmes cada abono y no impiden un abono manual diferente. La prioridad se basa en las estrategias de [reducción de deuda del CFPB](https://www.consumerfinance.gov/archive/blog/how-reduce-your-debt/).
+
+La proyección de pago usa promedios por día calendario desde el primer movimiento de los últimos 30 días, incluidos días sin ingresos. Simula tasas efectivas anuales, un aporte diario constante y cuotas mínimas equivalentes diarias. No garantiza una fecha ni reproduce comisiones, reglas de liquidación o condiciones específicas de cada acreedor. Si el ritmo no permite amortizar en diez años, no muestra fecha.
+
+En Moto, crea planes con último servicio, intervalo en km y costo esperado. No se recomiendan intervalos mecánicos universales: usa tu manual o mecánico. Ejemplo: aceite a 43.000 km + intervalo de 2.000 km = próximo a 45.000 km. Desde 43.000 km, a 100 km/día, son aproximadamente 20 días. Al registrar ese servicio se avanza automáticamente el ciclo. También puedes tomar un servicio del historial como punto de partida. Los planes aparecen en Calendario y el próximo servicio se refleja en Dashboard.
+
+Cada actualización del odómetro conserva la lectura máxima de ese día. Con lecturas que cubran al menos siete días, la fecha usa el promedio de los últimos 30 días; antes, usa los 100 km/día ajustables. El promedio es por día calendario: incluye descansos. Los días estimados se recalculan desde el kilometraje actual y no son una promesa.
+
+El apartado moto es un fondo separado dentro de MyLifeOs. Apartar descuenta la cuenta y aumenta el fondo; devolver hace lo contrario. En el historial financiero, el aporte se registra como salida al apartado y el retiro como entrada. La planificación excluye los retiros del fondo de los ingresos ganados. Al pagar un servicio con ese apartado se descuenta el fondo sin volver a descontar una cuenta ni duplicar el gasto. Es un control contable dentro de la app; no mueve dinero en el banco. Si pagas el mantenimiento fuera del apartado, registra ese gasto en Finanzas.
+
+La provisión diaria suma el costo por km de los planes y aumenta si falta dinero para un servicio próximo. Distribuye el saldo del fondo entre servicios cercanos sin usar el mismo dinero dos veces. Si el ingreso o el saldo disponible no alcanza, muestra el faltante sin consumir crédito ni el colchón configurado.

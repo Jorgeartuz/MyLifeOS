@@ -95,77 +95,22 @@ export const financeService = {
     description: string;
     transaction_date: string;
   }) {
-    const { data: { user } } = await supabase.auth.getUser();
-    
-    // 1. Obtener saldo actual y tipo de la cuenta
-    const { data: account, error: accError } = await supabase
-      .from('accounts')
-      .select('id, balance, type')
-      .eq('id', payload.account_id)
-      .single();
-
-    if (accError || !account) throw new Error("Cuenta no encontrada");
-
-    // 2. Calcular nuevo saldo
-    const currentBalance = Number(account.balance) || 0;
-    const newBalance = payload.type === 'income' 
-      ? currentBalance + payload.amount 
-      : currentBalance - payload.amount;
-
-    // Se permite saldo negativo si la cuenta es tarjeta de crédito
-    if (newBalance < 0 && account.type !== 'credit_card') {
-      throw new Error("Saldo insuficiente en la cuenta seleccionada");
-    }
-
-    // 3. Insertar transacción
-    const { data: transaction, error: tError } = await supabase
-      .from('transactions')
-      .insert([{ ...payload, user_id: user?.id }])
-      .select().single();
-
-    if (tError) throw tError;
-
-    // 4. Actualizar saldo de cuenta
-    const { error: aError } = await supabase
-      .from('accounts')
-      .update({ balance: newBalance })
-      .eq('id', payload.account_id);
-
-    if (aError) {
-      // Revertir inserción de transacción si falla la actualización de saldo
-      await supabase.from('transactions').delete().eq('id', transaction.id);
-      throw aError;
-    }
-
+    const { data, error } = await supabase.rpc('create_financial_entry', {
+      p_account_id: payload.account_id,
+      p_category_id: payload.category_id,
+      p_amount: payload.amount,
+      p_type: payload.type,
+      p_description: payload.description,
+      p_date: payload.transaction_date,
+    });
+    if (error) throw error;
+    const transaction = Array.isArray(data) ? data[0] : data;
+    if (!transaction?.id) throw new Error('No se recibió el movimiento registrado. Recarga antes de volver a intentarlo.');
     return transaction as Transaction;
   },
 
   async deleteTransaction(transaction: Transaction) {
-    // 1. Eliminar primero la transacción para garantizar integridad referencial
-    const { error: tError } = await supabase
-      .from('transactions')
-      .delete()
-      .eq('id', transaction.id);
-    
-    if (tError) throw tError;
-
-    // 2. Revertir el saldo en la cuenta
-    const { data: account } = await supabase
-      .from('accounts')
-      .select('balance')
-      .eq('id', transaction.account_id)
-      .single();
-
-    if (account) {
-      const currentBalance = Number(account.balance) || 0;
-      const restoredBalance = transaction.type === 'income'
-        ? currentBalance - Number(transaction.amount)
-        : currentBalance + Number(transaction.amount);
-
-      await supabase
-        .from('accounts')
-        .update({ balance: restoredBalance })
-        .eq('id', transaction.account_id);
-    }
+    const { error } = await supabase.rpc('reverse_financial_entry', { p_transaction_id: transaction.id });
+    if (error) throw error;
   }
 };

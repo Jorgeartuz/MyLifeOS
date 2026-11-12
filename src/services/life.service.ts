@@ -27,11 +27,11 @@ export const lifeService = {
   },
   async getDebts() {
     const id = await userId();
-    const { data, error } = await supabase.from('debts').select('*, debt_payments(id, amount, paid_on)').eq('user_id', id).order('created_at', { ascending: false });
+    const { data, error } = await supabase.from('debts').select('*, debt_payments(id, amount, paid_on, financial_transaction_id)').eq('user_id', id).order('created_at', { ascending: false });
     if (error) throw error;
     return data as Debt[];
   },
-  async addDebt(payload: { name: string; creditor: string; original_amount: number; due_date: string | null; notes: string }) {
+  async addDebt(payload: { name: string; creditor: string; original_amount: number; due_date: string | null; notes: string; annual_interest_rate?: number; minimum_payment?: number }) {
     const id = await userId();
     const { error } = await supabase.from('debts').insert({ ...payload, user_id: id });
     if (error) throw error;
