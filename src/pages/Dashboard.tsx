@@ -1,166 +1,62 @@
-import { useState, useEffect, useCallback, useRef } from 'react'; // 1. Añadimos useRef
-import { DashboardHeader } from '../components/dashboard/DashboardHeader';
-import { FinancialOverview } from '../components/dashboard/FinancialOverview';
-import { WorkOverview } from '../components/dashboard/WorkOverview';
-import { FinancialChart } from '../components/dashboard/FinancialChart';
-import { QuickActions } from '../components/dashboard/QuickActions';
+import { useCallback, useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { ArrowUpRight, ArrowDownRight, Wallet, PiggyBank, RefreshCw, ArrowRight, Bike, Package, CalendarDays, CreditCard, Target, Plus } from 'lucide-react';
+import { useModule } from '../hooks/useModule';
+import { dashboardService } from '../services/dashboard.service';
+import { DailyAllocationPanel } from '../components/finance/DailyAllocation';
+import { ActivityChart } from '../components/dashboard/ActivityChart';
 import { RecentTransactions } from '../components/dashboard/RecentTransactions';
 import { PeriodSelector } from '../components/ui/PeriodSelector';
-import { MotorcycleStatus } from '../components/dashboard/MotorcycleStatus';
-import { GoalProgress } from '../components/dashboard/GoalProgress';
-import { MyLifeInsight } from '../components/dashboard/MyLifeInsight';
-import { dashboardService } from '../services/dashboard.service';
-import { type WorkPeriod } from '../types/work';
-import { type Transaction } from '../types/finance';
-import { type SavingsGoal } from '../types/goals';
-import { Loader2 } from 'lucide-react';
-import { Link } from 'react-router-dom';
-import type { Motorcycle } from '../types/life';
-import { errorMessage } from '../lib/life';
 import { Feedback } from '../components/ui/Module';
+import { dateLabel, money, today } from '../lib/life';
+import type { WorkPeriod } from '../types/work';
 
-interface DashboardSummary {
-  user: { firstName: string };
-  finances: {
-    balance: number;
-    income: number;
-    expenses: number;
-    recentTransactions: Transaction[];
-  };
-  work: {
-    income: number;
-    deliveries: number;
-    kilometers: number;
-    hours: number;
-    fuelCost: number;
-    otherCosts: number;
-  };
-  moto: (Motorcycle & { next_service_name?: string }) | null;
-  goal: SavingsGoal | null;
+const periodNames = { hoy: 'Hoy', semana: 'Esta semana', mes: 'Este mes' };
+export default function Dashboard() {
+  const [period, setPeriod] = useState<WorkPeriod>('hoy');
+  const loader = useCallback(() => dashboardService.getDashboardData(period), [period]);
+  const { data, loading, error, reload } = useModule(loader);
+  const [refreshing, setRefreshing] = useState(false);
+  const refresh = useCallback(async () => { setRefreshing(true); await reload(); setRefreshing(false); }, [reload]);
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout>;
+    const update = () => { clearTimeout(timer); timer = setTimeout(() => { void refresh(); }, 200); };
+    const visible = () => { if (document.visibilityState === 'visible') update(); };
+    window.addEventListener('lifeos:planning-changed', update); window.addEventListener('focus', update);
+    document.addEventListener('visibilitychange', visible);
+    const interval = setInterval(visible, 60000);
+    return () => { clearTimeout(timer); clearInterval(interval); window.removeEventListener('lifeos:planning-changed', update); window.removeEventListener('focus', update); document.removeEventListener('visibilitychange', visible); };
+  }, [refresh]);
+  const hour = Number(new Intl.DateTimeFormat('es-CO', { hour: 'numeric', hourCycle: 'h23', timeZone: 'America/Bogota' }).format(new Date()));
+  const greeting = hour < 12 ? 'Buenos días' : hour < 19 ? 'Buenas tardes' : 'Buenas noches';
+  if (loading && !data) return <div className="space-y-5 animate-pulse" role="status"><div className="h-28 bg-slate-200 rounded-3xl" /><div className="grid grid-cols-2 lg:grid-cols-4 gap-4">{[1,2,3,4].map(i => <div key={i} className="h-32 bg-slate-200 rounded-2xl" />)}</div><div className="h-72 bg-slate-200 rounded-3xl" /><span className="sr-only">Cargando tu resumen</span></div>;
+  if (!data) return <div className="dashboard-panel"><h1 className="text-xl font-bold mb-3">Tu resumen personal</h1><Feedback error={error} /><button className="module-button mt-4" onClick={refresh}>Volver a intentar</button></div>;
+  const nextService = data.plan.forecasts[0];
+  const pending = refreshing || (data.period !== period && !error);
+  const comparison = (change: number | null) => change === null ? 'Sin base para comparar' : (change > 0 ? '+' : '') + change + ' % vs. ' + (data.window.days === 1 ? 'el d?a anterior' : data.window.days + ' d?as anteriores');
+  return <div className="space-y-6 pb-6" aria-busy={pending}>
+    <header className="dashboard-hero"><div className="min-w-0"><p className="hidden sm:block text-xs uppercase tracking-[0.16em] font-bold text-blue-200">Tu vida, en orden</p><h1 className="text-xl sm:text-3xl font-bold tracking-tight break-words sm:mt-2">{greeting}, {data.firstName}</h1><p className="hidden sm:block text-blue-100 text-sm mt-2">Una mirada clara a tu dinero, tus metas y lo que viene.</p><p className="text-sm text-blue-100 mt-2 sm:hidden">Tu base de hoy: <strong className="text-white">{money(data.plan.base)}</strong></p><p className="text-[11px] sm:text-xs text-blue-200 mt-2 sm:mt-4">{new Date().toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'America/Bogota' })}</p></div><button className="dashboard-refresh shrink-0 !px-3 sm:!px-4" onClick={refresh} disabled={pending} aria-label="Actualizar Dashboard"><RefreshCw size={18} className={pending ? 'animate-spin' : ''} /><span className="hidden sm:inline">{pending ? 'Actualizando' : 'Actualizar'}</span></button></header>
+    <Feedback error={error} />
+    <div className="grid grid-cols-4 gap-2 sm:gap-3" aria-label="Acciones rápidas">{[{ to: '/trabajo?action=delivery', label: 'Nuevo domicilio', mobile: 'Domicilio', icon: Package }, { to: '/finanzas?action=expense', label: 'Registrar gasto', mobile: 'Gasto', icon: Plus }, { to: '/metas', label: 'Ahorrar', mobile: 'Ahorrar', icon: Target }, { to: '/moto', label: 'Mi moto', mobile: 'Moto', icon: Bike }].map(a => <Link key={a.to} to={a.to} aria-label={a.label} className="dashboard-action"><a.icon size={18} /><span className="sm:hidden">{a.mobile}</span><span className="hidden sm:inline">{a.label}</span><ArrowUpRight size={14} className="hidden sm:block ml-auto text-text-secondary" /></Link>)}</div>
+    <section aria-labelledby="financial-summary"><div className="flex flex-wrap justify-between gap-3 items-center mb-4"><div><h2 id="financial-summary" className="text-lg font-bold">Tu panorama financiero</h2><p className="text-xs text-text-secondary mt-1">{dateLabel(data.window.start)} — {dateLabel(today())} · {periodNames[data.period]}{pending ? ' · Actualizando datos' : ''}</p></div><PeriodSelector period={period} onChange={setPeriod} /></div>
+      <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">{[
+        { label: 'Saldo líquido actual', value: data.liquid, note: 'En cuentas activas, sin crédito', icon: Wallet, tone: 'text-primary bg-blue-50' },
+        { label: 'Ingresos del período', value: data.totals.income, note: comparison(data.incomeChange), icon: ArrowUpRight, tone: 'text-emerald-700 bg-emerald-50' },
+        { label: 'Gastos pagados', value: data.totals.expenses, note: comparison(data.expenseChange), icon: ArrowDownRight, tone: 'text-rose-600 bg-rose-50' },
+        { label: 'Apartados del período', value: data.totals.reserved, note: 'Aportes a metas y fondo moto', icon: PiggyBank, tone: 'text-violet-700 bg-violet-50' },
+      ].map(card => <article key={card.label} className="dashboard-panel !p-4 sm:!p-5"><span className={`inline-flex p-2 rounded-xl ${card.tone}`}><card.icon size={18} /></span><p className="text-xs text-text-secondary mt-3">{card.label}</p><p className="text-xl sm:text-2xl font-bold tracking-tight mt-1 break-words">{money(card.value)}</p><p className="text-[11px] text-text-secondary mt-2">{card.note}</p></article>)}</div>
+      <p className="text-xs text-text-secondary mt-3">Flujo de cuentas: <strong>{money(data.totals.cashflow)}</strong> · Entradas menos todas las salidas, incluidos apartados. Hoy aún está en curso.</p>
+    </section>
+    <DailyAllocationPanel data={data.overview} error={error} loading={false} reload={refresh} />
+    <div className="grid xl:grid-cols-3 gap-5"><div className="xl:col-span-2 space-y-5"><ActivityChart points={data.chart} />
+      <section className="dashboard-panel"><div className="flex justify-between items-center gap-3"><div className="flex items-center gap-2"><Package size={18} className="text-primary" /><h2 className="font-bold">Tu trabajo · {periodNames[data.period].toLowerCase()}</h2></div><Link to="/trabajo" className="text-xs font-bold text-primary">Ver trabajo <ArrowRight size={14} className="inline" /></Link></div><div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-5">{[['Domicilios', String(data.work.count)], ['Cobrado neto', money(data.work.net)], ['Efectivo neto', money(data.work.cash)], ['Transferencias netas', money(data.work.transfer)]].map(([label,value]) => <div key={label}><p className="text-xs text-text-secondary">{label}</p><p className="text-lg font-bold mt-1">{value}</p></div>)}</div><p className="text-xs text-text-secondary mt-4">Comisiones del período: {money(data.work.commissions)}. El cobrado neto descuenta comisiones; los gastos operativos están en Finanzas.</p><p className="text-sm mt-3 rounded-xl bg-background p-3">{data.activePackage ? `Paquete activo: ${data.activePackage.remaining_deliveries} de ${data.activePackage.package_size} domicilios disponibles.` : 'Sin paquete activo. Los domicilios registrados sin paquete aplican comisión del 20 %.'}</p></section>
+      <RecentTransactions transactions={data.recentTransactions} />
+    </div><aside className="space-y-5">
+      <section className="dashboard-panel"><div className="flex items-center gap-2"><CalendarDays size={18} className="text-primary" /><h2 className="font-bold">Para tener presente</h2></div><p className="text-xs text-text-secondary mt-1">Pendientes y próximos 30 días</p><div className="mt-4 divide-y divide-border">{data.deadlines.length === 0 ? <p className="text-sm text-text-secondary py-3">No tienes vencimientos registrados para los próximos días.</p> : data.deadlines.slice(0,6).map(e => <Link key={e.id} to={e.href} className="flex justify-between gap-3 py-3 items-center"><span className="text-sm font-medium min-w-0 break-words">{e.title}<span className="block text-xs text-text-secondary mt-1">{e.approximate ? 'Fecha aproximada' : e.date < today() ? 'Pendiente vencido' : e.date === today() ? 'Hoy' : 'Próximamente'}</span></span><span className={`text-xs shrink-0 ${e.date < today() ? 'text-red-700 font-bold' : 'text-text-secondary'}`}>{dateLabel(e.date)}</span></Link>)}</div><Link className="text-sm text-primary font-semibold inline-block mt-3" to="/calendario">Abrir calendario →</Link></section>
+      <section className="dashboard-panel"><div className="flex items-center gap-2"><CreditCard size={18} className="text-primary" /><h2 className="font-bold">Tus compromisos</h2></div><p className="text-2xl font-bold mt-4">{money(data.debtRemaining)}</p><p className="text-xs text-text-secondary mt-1">Saldo de deudas registradas</p>{data.creditDebt > 0 && <p className="text-xs text-text-secondary mt-3">Tarjetas por pagar en Finanzas: {money(data.creditDebt)}. Revisa si también las registraste como deuda.</p>}<p className="text-sm mt-4">Abono posible hoy: <strong>{money(data.plan.budget.debt)}</strong></p><Link to="/deudas" className="text-sm text-primary font-semibold inline-block mt-4">Ver mi plan de pagos →</Link></section>
+      <section className="dashboard-panel"><div className="flex items-center gap-2"><Bike size={18} className="text-primary" /><h2 className="font-bold">Tu moto, preparada</h2></div>{data.overview.moto ? <><p className="font-bold mt-4">{data.overview.moto.model}</p><p className="text-sm text-text-secondary mt-1">{Number(data.overview.moto.odometer).toLocaleString('es-CO')} km registrados</p>{nextService ? <div className="bg-background rounded-xl p-3 mt-4"><p className="font-semibold text-sm">{nextService.name}</p><p className={`text-sm mt-1 ${nextService.remainingKm === 0 ? 'text-red-700' : 'text-primary'}`}>{nextService.remainingKm === 0 ? 'Ya corresponde este servicio' : `Faltan ${nextService.remainingKm.toLocaleString('es-CO')} km`}</p><p className="text-xs text-text-secondary mt-1">{nextService.estimatedDate ? `Aprox. ${dateLabel(nextService.estimatedDate)}` : 'Actualiza tu recorrido para estimar la fecha'}</p></div> : <p className="text-sm text-text-secondary mt-3">Programa el próximo servicio para anticipar el gasto.</p>}<p className="text-sm mt-3">Fondo disponible: <strong>{money(Number(data.overview.fund.balance))}</strong></p></> : <p className="text-sm text-text-secondary mt-4">Registra tu moto y sus intervalos para anticipar los cambios.</p>}<Link to="/moto" className="text-sm text-primary font-semibold inline-block mt-4">Ver mantenimientos →</Link></section>
+    </aside></div>
+    <section className="dashboard-panel"><div className="flex flex-wrap justify-between gap-3 items-center"><div><h2 className="font-bold">Lo que estás construyendo</h2><p className="text-xs text-text-secondary mt-1">{money(data.savings)} guardados en todas tus metas</p></div><Link to="/metas" className="text-sm font-semibold text-primary">Ver metas →</Link></div><div className="grid md:grid-cols-3 gap-4 mt-4">{data.activeGoals.length === 0 ? <p className="text-sm text-text-secondary">Crea una meta con fecha para darle un destino a tu ahorro.</p> : data.activeGoals.slice(0,3).map(g => { const progress = Math.min(100, Math.max(0, Number(g.current_amount || 0) / Number(g.target_amount) * 100)); return <Link to="/metas" key={g.id} className="bg-background p-4 rounded-xl border border-border"><div className="flex justify-between gap-2"><h3 className="font-semibold text-sm">{g.name}</h3><span className="text-xs text-primary">{Math.round(progress)} %</span></div><p className="text-xs text-text-secondary mt-2">{money(Number(g.current_amount || 0))} / {money(Number(g.target_amount))}</p><div className="h-1.5 bg-slate-200 rounded-full mt-3 overflow-hidden"><div className="h-full bg-primary rounded-full" style={{ width: `${progress}%` }} /></div><p className="text-xs text-text-secondary mt-3">{g.target_date ? `Para el ${dateLabel(g.target_date)}` : 'A tu ritmo, sin fecha límite'}</p></Link>; })}</div></section>
+    <p className="text-[11px] text-text-secondary text-center">Última sincronización: {new Date(data.updatedAt).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' })} · Valores en COP</p>
+  </div>;
 }
-
-const Dashboard = () => {
-  const [period, setPeriod] = useState<WorkPeriod>('semana');
-  const [loading, setLoading] = useState(true);
-  const [data, setData] = useState<DashboardSummary | null>(null);
-  const [error, setError] = useState('');
-  
-  // 2. Usamos una referencia para rastrear el primer renderizado
-  const isFirstRender = useRef(true);
-
-  const loadDashboard = useCallback(async () => {
-    try {
-      const result = await dashboardService.getDashboardData(period);
-      setData(result);
-      setError('');
-    } catch (error) {
-      console.error("Error al cargar Dashboard:", error);
-      setError(errorMessage(error));
-    } finally {
-      setLoading(false);
-    }
-  }, [period]);
-
-  useEffect(() => {
-    const refresh = () => { void loadDashboard(); };
-    window.addEventListener('lifeos:planning-changed', refresh);
-    return () => window.removeEventListener('lifeos:planning-changed', refresh);
-  }, [loadDashboard]);
-
-  useEffect(() => {
-    let isMounted = true;
-
-    const executeLoad = async () => {
-      if (!isMounted) return;
-
-      // 3. Si no es la primera vez (ej. el usuario cambió el periodo), mostramos el loading
-      if (!isFirstRender.current) {
-        setLoading(true);
-      }
-      
-      await loadDashboard();
-      
-      // Ya no es el primer renderizado
-      isFirstRender.current = false;
-    };
-
-    executeLoad();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [loadDashboard]); // Ahora el linter no pide 'data' porque ya no la usamos aquí
-
-  if (loading && !data) {
-    return (
-      <div className="flex h-[60vh] flex-col items-center justify-center text-text-secondary">
-        <Loader2 className="animate-spin mb-4" size={32} />
-        <p className="text-sm font-medium animate-pulse">Sincronizando MyLifeOS...</p>
-      </div>
-    );
-  }
-
-  if (!data) return <div className="space-y-4"><Feedback error={error} /><button className="module-button" onClick={loadDashboard}>Volver a intentar</button></div>;
-
-  const financialMetrics = {
-    available: data.finances.balance,
-    income: { title: 'Ingresos', value: data.finances.income, change: 0, trend: 'neutral' as const },
-    expenses: { title: 'Gastos', value: data.finances.expenses, change: 0, trend: 'neutral' as const },
-    savings: { title: 'Ahorro', value: data.finances.income - data.finances.expenses, change: 0, trend: 'neutral' as const }
-  };
-
-  return (
-    <div className="animate-in fade-in duration-500 pb-10">
-      <Feedback error={error} />
-      <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
-        <DashboardHeader name={data.user.firstName} />
-        <PeriodSelector period={period} onChange={setPeriod} />
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        <div className="lg:col-span-8 space-y-8">
-          <FinancialOverview metrics={financialMetrics} />
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <FinancialChart income={data.finances.income} expenses={data.finances.expenses} />
-            <WorkOverview data={data.work} />
-          </div>
-
-          <RecentTransactions transactions={data.finances.recentTransactions} />
-        </div>
-
-        <div className="lg:col-span-4 space-y-8">
-          <section>
-            <h3 className="text-[10px] font-bold text-text-secondary uppercase tracking-[0.2em] mb-4">Acceso rápido</h3>
-            <QuickActions />
-          </section>
-          
-          {data.moto ? <MotorcycleStatus moto={{
-            model: data.moto.model,
-            kilometers: Number(data.moto.odometer),
-            status: 'Operativa',
-            nextMaintenance: data.moto.next_service_name || 'Mantenimiento programado',
-            nextMaintenanceKm: data.moto.next_maintenance_km,
-            lastMaintenanceKm: 0
-          }} /> : <Link to="/moto" className="block bg-surface p-6 rounded-card border border-border text-primary">Registra tu moto para ver su estado.</Link>}
-
-          {data.goal ? (
-            <GoalProgress goal={{
-              name: data.goal.name,
-              current: data.goal.current_amount || 0,
-              target: data.goal.target_amount
-            }} />
-          ) : (
-            <div className="bg-surface p-6 rounded-card border border-dashed border-border text-center">
-              <p className="text-xs text-text-secondary italic">No tienes metas establecidas</p>
-            </div>
-          )}
-
-          <MyLifeInsight insight={`Has realizado ${data.work.deliveries} domicilios en este periodo.`} />
-        </div>
-      </div>
-    </div>
-  );
-};
-
-export default Dashboard;

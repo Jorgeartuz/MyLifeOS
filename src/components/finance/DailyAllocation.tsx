@@ -9,8 +9,7 @@ import { today, money, errorMessage } from '../../lib/life';
 import type { SavingsGoal } from '../../types/goals';
 import type { PlanningSettings } from '../../types/planning';
 
-export function DailyAllocation() {
-  const { data, error, loading, reload } = usePlanningOverview();
+export function DailyAllocationPanel({ data, error, loading, reload }: ReturnType<typeof usePlanningOverview>) {
   const [busy, setBusy] = useState(false); const [formError, setFormError] = useState('');
   const [selected, setSelected] = useState<{ goal: SavingsGoal; amount: number } | null>(null);
   const plan = data ? planningSnapshot(data, today()) : null;
@@ -56,4 +55,8 @@ export function DailyAllocation() {
     </div><Field label="Categorías de tus gastos personales"><select className="module-input min-h-28" name="personalCategories" multiple defaultValue={data.settings.personal_category_ids}>{data.categories.filter(c => c.type !== 'income').map(c => <option value={c.id} key={c.id}>{c.name}</option>)}</select></Field><p className="text-xs text-text-secondary">Selecciona las categorías personales para que sus gastos reduzcan ese presupuesto. Los demás gastos reducen el presupuesto general/trabajo. El mínimo general anterior incluía todo: ajústalo si ahora separas personales para no duplicarlos.</p><Feedback error={formError} /><SaveButton busy={busy}>Guardar reparto</SaveButton></form></details>
     {selected && <ContributionModal key={`${selected.goal.id}-${selected.amount}`} isOpen onClose={() => setSelected(null)} goal={selected.goal} initialAmount={selected.amount} accounts={data.accounts} onSuccess={reload} />}
   </Panel></div>;
+}
+
+export function DailyAllocation() {
+  return <DailyAllocationPanel {...usePlanningOverview()} />;
 }

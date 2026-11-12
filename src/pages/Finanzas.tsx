@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { FinanceHeader } from '../components/finance/FinanceHeader';
 import { BalanceCard } from '../components/finance/BalanceCard';
 import { RecentTransactions } from '../components/finance/RecentTransactions';
@@ -9,13 +10,14 @@ import type { Account, Category, Transaction } from '../types/finance';
 import { Plus, Loader2, Wallet, ArrowUpCircle, ArrowDownCircle } from 'lucide-react';
 
 const Finanzas = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [totals, setTotals] = useState({ income: 0, expenses: 0 });
   const [loading, setLoading] = useState(true);
   const [isAccModalOpen, setIsAccModalOpen] = useState(false);
-  const [isTxModalOpen, setIsTxModalOpen] = useState(false);
+  const [isTxModalOpen, setIsTxModalOpen] = useState(searchParams.get('action') === 'expense');
 
   // Función de carga de datos estable
   const loadData = useCallback(async () => {
@@ -139,7 +141,7 @@ const Finanzas = () => {
       
       <TransactionModal 
         isOpen={isTxModalOpen} 
-        onClose={() => setIsTxModalOpen(false)} 
+        onClose={() => { setIsTxModalOpen(false); setSearchParams({}, { replace: true }); }}
         accounts={accounts} 
         categories={categories} 
         onSuccess={loadData} 

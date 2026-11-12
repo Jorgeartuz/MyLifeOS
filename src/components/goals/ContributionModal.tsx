@@ -48,8 +48,8 @@ export const ContributionModal = ({ isOpen, onClose, goal, accounts, onSuccess, 
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-text/20 backdrop-blur-sm">
-      <div className="bg-surface w-full max-w-md rounded-card shadow-2xl animate-in zoom-in duration-200">
+    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-text/20 backdrop-blur-sm">
+      <div role="dialog" aria-modal="true" className="app-dialog bg-surface w-full max-w-md rounded-card shadow-2xl animate-in zoom-in duration-200">
         <div className="flex justify-between items-center p-6 border-b border-border">
           <div>
             <h3 className="font-bold text-text flex items-center gap-2">

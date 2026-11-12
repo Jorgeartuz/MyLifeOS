@@ -18,6 +18,7 @@ export const PeriodSelector = ({ period, onChange }: PeriodSelectorProps) => {
         <button
           key={option.value}
           onClick={() => onChange(option.value)}
+          aria-pressed={period === option.value}
           className={`px-4 py-2 rounded-lg text-xs font-bold transition-all capitalize ${
             period === option.value ? 'bg-primary text-white shadow-md' : 'text-text-secondary hover:text-text'
           }`}

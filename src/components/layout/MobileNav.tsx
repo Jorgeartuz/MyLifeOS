@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { 
   LayoutDashboard, 
@@ -15,6 +15,12 @@ import {
 
 export const MobileNav = () => {
   const [showMore, setShowMore] = useState(false);
+  useEffect(() => {
+    if (!showMore) return;
+    const close = (event: KeyboardEvent) => { if (event.key === 'Escape') setShowMore(false); };
+    window.addEventListener('keydown', close);
+    return () => window.removeEventListener('keydown', close);
+  }, [showMore]);
 
   const primaryItems = [
     { path: '/', icon: <LayoutDashboard size={24} />, label: 'Inicio' },
@@ -35,11 +41,12 @@ export const MobileNav = () => {
       {/* Overlay del Menú "Más" */}
       {showMore && (
         <div className="md:hidden fixed inset-0 z-[60] flex items-end justify-center bg-text/20 backdrop-blur-sm">
-          <div className="w-full bg-surface rounded-t-[20px] p-6 shadow-2xl animate-in slide-in-from-bottom duration-300">
+          <div id="mobile-more" role="dialog" aria-modal="true" aria-labelledby="mobile-more-title" className="w-full bg-surface rounded-t-[20px] p-6 shadow-2xl animate-in slide-in-from-bottom duration-300" style={{ paddingBottom: 'max(1.5rem, env(safe-area-inset-bottom))' }}>
             <div className="flex justify-between items-center mb-6">
-              <h3 className="font-bold text-text text-lg">Otras opciones</h3>
+              <h3 id="mobile-more-title" className="font-bold text-text text-lg">Otras opciones</h3>
               <button 
                 onClick={() => setShowMore(false)}
+                aria-label="Cerrar otras opciones"
                 className="p-2 bg-background rounded-full"
               >
                 <X size={20} />
@@ -63,11 +70,12 @@ export const MobileNav = () => {
       )}
 
       {/* Barra de Navegación Principal */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-surface border-t border-border px-2 flex justify-around items-center z-50 h-16 pb-safe">
+      <nav aria-label="Navegación principal" className="mobile-nav md:hidden fixed bottom-0 left-0 right-0 bg-surface border-t border-border px-2 flex justify-around items-center z-50">
         {primaryItems.map((item) => (
           <NavLink
             key={item.path}
             to={item.path}
+            end={item.path === '/'}
             className={({ isActive }) => `
               flex flex-col items-center justify-center py-1 px-3 rounded-xl transition-colors
               ${isActive ? 'text-primary' : 'text-text-secondary'}
@@ -80,6 +88,8 @@ export const MobileNav = () => {
         
         <button
           onClick={() => setShowMore(true)}
+          aria-expanded={showMore}
+          aria-controls="mobile-more"
           className={`flex flex-col items-center justify-center py-1 px-3 rounded-xl transition-colors ${showMore ? 'text-primary' : 'text-text-secondary'}`}
         >
           <MoreHorizontal size={24} />

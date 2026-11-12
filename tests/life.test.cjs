@@ -249,3 +249,51 @@ test('Chosen personal categories reduce their own budget without consuming the w
   assert.equal(plan.spent, 5000);
   assert.equal(plan.goals.total, 12000);
 });
+
+const dashboard = load('src/lib/dashboardAnalytics.ts', {
+  './planning': planning, './life': { debtRemaining, automaticEvents }, './goalPlanning': load('src/lib/goalPlanning.ts'),
+});
+test('Dashboard compares equal calendar-day windows across week and month boundaries', () => {
+  assert.deepEqual(dashboard.dashboardWindow('semana','2026-11-12'), { start: '2026-11-09', end: '2026-11-13', previousStart: '2026-11-05', days: 4 });
+  assert.deepEqual(dashboard.dashboardWindow('mes','2026-11-01'), { start: '2026-11-01', end: '2026-11-02', previousStart: '2026-10-31', days: 1 });
+});
+test('Dashboard separates savings and fund refunds from real expenses and earned income', () => {
+  const ledger = [
+    { id: 'earned', type: 'income', amount: 100000, transaction_date: '2026-11-12T12:00:00-05:00' },
+    { id: 'prior', type: 'income', amount: 80000, transaction_date: '2026-11-11T12:00:00-05:00' },
+    { id: 'expense', type: 'expense', amount: 10000, transaction_date: '2026-11-12T12:00:00-05:00' },
+    { id: 'saving', type: 'expense', source: 'goal_contribution', amount: 20000, transaction_date: '2026-11-12T12:00:00-05:00' },
+    { id: 'refund', type: 'income', source: 'moto_reserve_refund', amount: 5000, transaction_date: '2026-11-12T12:00:00-05:00' },
+    { id: 'future', type: 'income', amount: 500000, transaction_date: '2026-11-13T12:00:00-05:00' },
+  ];
+  const data = dashboard.dashboardAnalytics(unifiedData(), ledger, [], [], 'hoy','2026-11-12');
+  assert.equal(data.totals.income, 100000);
+  assert.equal(data.totals.expenses, 10000);
+  assert.equal(data.totals.reserved, 20000);
+  assert.equal(data.totals.cashflow, 75000);
+  assert.equal(data.incomeChange, 25);
+  assert.equal(data.expenseChange, null);
+  assert.equal(data.chart.length, 1);
+  assert.equal(data.recentTransactions.length, 4);
+});
+test('Work summary uses recorded commission/net values and does not fabricate hours or kilometres', () => {
+  const rows = [
+    { created_at: '2026-11-12T12:00:00-05:00', amount: 10000, net_amount: 8000, commission_amount: 2000, payment_method: 'cash' },
+    { created_at: '2026-11-11T12:00:00-05:00', amount: 10000, net_amount: 8000, commission_amount: 2000, payment_method: 'transfer' },
+  ];
+  const data = dashboard.dashboardAnalytics(unifiedData(), [], rows, [], 'hoy','2026-11-12');
+  assert.equal(data.work.count, 1);
+  assert.equal(data.work.net, 8000);
+  assert.equal(data.work.cash, 8000);
+  assert.equal(data.work.commissions, 2000);
+  assert.equal('hours' in data.work, false);
+  assert.equal('kilometers' in data.work, false);
+});
+test('Dashboard lists unfinished upcoming events and active goals while omitting completed events', () => {
+  const events = [{ id: 'e1', title: 'Pendiente', event_date: '2026-11-13', completed: false }, { id: 'e2', title: 'Hecho', event_date: '2026-11-13', completed: true }];
+  const data = dashboard.dashboardAnalytics(unifiedData(), [], [], events, 'hoy','2026-11-12');
+  assert.ok(data.deadlines.some(e => e.title === 'Pendiente'));
+  assert.equal(data.deadlines.some(e => e.title === 'Hecho'), false);
+  assert.ok(data.deadlines.some(e => e.href === '/metas'));
+  assert.equal(data.incomeChange, null);
+});

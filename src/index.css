@@ -5,7 +5,27 @@
 @layer components {
   .module-input { @apply block w-full bg-background border border-border rounded-xl px-3 py-2 text-sm; }
   .module-button { @apply inline-flex items-center justify-center bg-primary text-white rounded-xl px-4 py-2 text-sm font-bold hover:bg-primary-dark disabled:opacity-50 disabled:cursor-not-allowed; }
+  .dashboard-panel { @apply bg-white border border-border rounded-2xl p-5 sm:p-6 shadow-sm; }
+  .dashboard-hero { @apply rounded-3xl p-5 sm:p-8 text-white flex flex-nowrap items-center justify-between gap-3 sm:gap-5; background: linear-gradient(120deg, #0f172a, #1e40af); }
+  .dashboard-refresh { @apply flex items-center gap-2 min-h-11 px-4 py-2 rounded-xl bg-white/10 border border-white/20 text-sm font-semibold hover:bg-white/20 disabled:opacity-70; }
+  .dashboard-action { @apply min-h-14 min-w-0 flex flex-col sm:flex-row items-center justify-center sm:justify-start gap-1 sm:gap-2 bg-white border border-border rounded-2xl p-2 sm:p-3 text-[11px] sm:text-sm font-semibold text-primary hover:border-primary/40 transition-colors; }
+  .install-step { @apply flex items-center justify-center w-7 h-7 shrink-0 rounded-full bg-blue-50 text-primary font-bold; }
 }
+
+.app-shell { min-height: 100vh; min-height: 100dvh; }
+.app-header { height: calc(4rem + env(safe-area-inset-top, 0px)); padding-top: env(safe-area-inset-top, 0px); }
+.app-content { padding-bottom: calc(6rem + env(safe-area-inset-bottom, 0px)); }
+.mobile-nav { min-height: calc(4rem + env(safe-area-inset-bottom, 0px)); padding-bottom: env(safe-area-inset-bottom, 0px); }
+.app-dialog { max-height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 2rem); overflow-y: auto; }
+.pwa-status { position: fixed; z-index: 40; left: 1rem; right: 1rem; bottom: calc(5rem + env(safe-area-inset-bottom, 0px)); max-width: 36rem; margin: auto; display: flex; align-items: center; gap: .75rem; padding: .75rem 1rem; background: #0f172a; color: white; border-radius: 1rem; font-size: .8rem; box-shadow: 0 8px 30px #0f172a33; }
+button, a { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+@media (max-width: 767px) {
+  input, select, textarea { font-size: 16px !important; }
+  button, input:not([type="checkbox"]):not([type="radio"]), select { min-height: 44px; }
+  .app-content, .app-header { padding-left: max(1rem, env(safe-area-inset-left, 0px)); padding-right: max(1rem, env(safe-area-inset-right, 0px)); }
+}
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; scroll-behavior: auto !important; } }
+@media (min-width: 768px) { .app-content { padding-bottom: 2.5rem; } .pwa-status { bottom: 1.5rem; } }
 
 @layer base {
   body {

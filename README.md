@@ -97,3 +97,19 @@ Los aportes diarios sugeridos comparten un solo presupuesto entre todas las meta
 La tercera migración convierte los aportes a metas en una operación atómica: bloquea meta y cuenta, valida propietario, estado, saldo sin crédito y monto pendiente, crea el movimiento financiero y el aporte, y completa la meta al alcanzar el objetivo. Los totales se suman en PostgreSQL sobre todo el historial, evitando el límite de filas del cliente. El planificador recibe los aportes recientes y reconoce las descripciones generadas por versiones anteriores para no contarlos otra vez como gastos generales.
 
 El panel se actualiza tras movimientos hechos en la aplicación, al volver a la ventana y cada minuto mientras está visible. No requiere configurar Supabase Realtime. Las sugerencias requieren confirmación para mover dinero y un aporte manual puede diferir del sugerido. Los nuevos campos del presupuesto tienen políticas y controles de la planificación existente; las operaciones RPC de metas verifican la sesión y el propietario explícitamente.
+
+## Dashboard y acceso desde iPhone
+
+El Dashboard separa saldo liquido actual, ingresos ganados, gastos pagados y aportes a metas/fondo moto. No considera una devolucion del fondo como ingreso ganado, ni llama ahorro al flujo de cuentas. Las comparaciones usan el mismo numero de dias calendario inmediatamente anteriores; si no hay base, lo indica. Hoy sigue en curso. Las consultas financieras y de domicilios del resumen estan paginadas y filtradas por usuario.
+
+El resumen de trabajo usa importes registrados y comisiones reales. No inventa horas ni kilometros por domicilio. Las metas activas, compromisos, documentos de moto y mantenimientos estimados se incluyen en los proximos pendientes. El plan de reparto siempre corresponde a hoy, independientemente del periodo de las estadisticas.
+
+Desde Safari en el iPhone, abre https://mylifeos-one.vercel.app, toca Compartir y luego Añadir a pantalla de inicio. Si aparece Abrir como app web, actívalo y confirma Añadir. También hay instrucciones en el botón Instalar app del encabezado. Puede ser necesario iniciar sesión de nuevo la primera vez que abras el icono. Guía de Apple: https://support.apple.com/guide/iphone/iphea86e5236/ios.
+
+La app tiene manifiesto, iconos PNG, apple-touch-icon, modo standalone, areas seguras y controles tactiles. Los campos usan al menos 16px en movil para evitar el zoom de enfoque. Los modulos secundarios se cargan al abrirlos.
+
+Los datos y movimientos requieren internet. El service worker solo guarda recursos publicos y archivos estaticos del mismo origen; no almacena respuestas de Supabase/Auth, paginas autenticadas ni operaciones pendientes. Al abrir sin conexion muestra una pantalla generica para reintentar. Una actualizacion espera confirmacion antes de recargar para dar tiempo a guardar formularios. No se requiere una migracion SQL adicional para esta mejora.
+
+### Pruebas de navegador
+
+Instala los navegadores con `npx playwright install chromium webkit` y ejecuta `npm run test:ui`. El servidor de pruebas genera `dist-e2e` con un endpoint Supabase ficticio y todas las consultas usan datos simulados. No ejecuta movimientos en la base real. Se comprueban escritorio, WebKit con dimensiones de iPhone, navegacion, instalacion y pantalla sin conexion en Chromium; esto no reemplaza la prueba final en un iPhone fisico. Capturas y trazas quedan en `test-results`, excluido de Git. Usa `npm run icons` para regenerar los iconos desde el diseno vectorial en `scripts/generate-app-icons.cjs`.

@@ -12,6 +12,7 @@ import {
   ChevronLeft,
   ChevronRight
 } from 'lucide-react';
+import { UserRound } from 'lucide-react';
 
 const mainNav = [
   { path: '/', label: 'Dashboard', icon: <LayoutDashboard size={20} /> },
@@ -36,9 +37,7 @@ export const Sidebar = () => {
       {/* Logo Section */}
       <div className="h-16 flex items-center px-6 mb-4">
         <div className="flex items-center gap-3 overflow-hidden">
-          <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center flex-shrink-0 shadow-sm shadow-primary/20">
-            <div className="w-4 h-4 border-2 border-white rounded-sm rotate-45" />
-          </div>
+          <img src="/icons/app-192.png" alt="" width="32" height="32" className="rounded-lg flex-shrink-0" />
           {!isCollapsed && (
             <span className="font-bold text-xl tracking-tight text-text uppercase transition-opacity duration-200">
               MyLife<span className="text-primary">OS</span>
@@ -113,17 +112,17 @@ export const Sidebar = () => {
           )}
         </button>
 
-        <div className={`flex items-center gap-3 p-2 bg-surface rounded-card border border-border shadow-sm ${isCollapsed ? 'justify-center' : ''}`}>
+        <NavLink to="/configuracion" aria-label="Abrir mi cuenta" className={`flex items-center gap-3 p-2 bg-surface rounded-card border border-border shadow-sm ${isCollapsed ? 'justify-center' : ''}`}>
           <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-white font-bold flex-shrink-0 text-xs shadow-sm">
-            J
+            <UserRound size={16} />
           </div>
           {!isCollapsed && (
             <div className="overflow-hidden">
-              <p className="text-sm font-bold truncate text-text">Jorge</p>
-              <p className="text-[10px] text-text-secondary truncate font-medium">Mi cuenta</p>
+              <p className="text-sm font-bold truncate text-text">Mi cuenta</p>
+              <p className="text-[10px] text-text-secondary truncate font-medium">Perfil y configuración</p>
             </div>
           )}
-        </div>
+        </NavLink>
       </div>
     </aside>
   );

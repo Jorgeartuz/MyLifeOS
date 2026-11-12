@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { PeriodSelector } from '../components/ui/PeriodSelector';
 import { workService } from '../services/work.service';
 import { financeService } from '../services/finance.service';
@@ -9,13 +10,14 @@ import { DeliveryModal } from '../components/work/DeliveryModal';
 import { BuyPackageModal } from '../components/work/BuyPackageModal';
 
 const Trabajo = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [period, setPeriod] = useState<WorkPeriod>('hoy');
   const [loading, setLoading] = useState(true);
   const [activePackage, setActivePackage] = useState<WorkPackage | null>(null);
   const [deliveries, setDeliveries] = useState<WorkDelivery[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   
-  const [isDeliveryModalOpen, setIsDeliveryModalOpen] = useState(false);
+  const [isDeliveryModalOpen, setIsDeliveryModalOpen] = useState(searchParams.get('action') === 'delivery');
   const [isPackageModalOpen, setIsPackageModalOpen] = useState(false);
 
   // Carga de datos reales desde Supabase
@@ -190,7 +192,7 @@ const Trabajo = () => {
 
       <DeliveryModal 
         isOpen={isDeliveryModalOpen} 
-        onClose={() => setIsDeliveryModalOpen(false)} 
+        onClose={() => { setIsDeliveryModalOpen(false); setSearchParams({}, { replace: true }); }}
         accounts={accounts} 
         onSuccess={loadData} 
       />
