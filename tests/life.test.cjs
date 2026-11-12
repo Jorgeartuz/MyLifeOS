@@ -11,6 +11,8 @@ function load(relative, overrides = {}) {
   const module = { exports: {} };
   new Function('require', 'module', 'exports', code)(name => {
     if (name in overrides) return overrides[name];
+    if (name === './goalPlanning') return load('src/lib/goalPlanning.ts');
+    if (name === '../lib/planningEvents') return { notifyPlanningChanged() {} };
     throw new Error(`Unexpected dependency ${name}`);
   }, module, module.exports);
   return module.exports;
@@ -162,4 +164,88 @@ test('Finance RPC result accepts PostgREST row arrays as well as a singular obje
     const tx = await financeService.createTransaction({ account_id: 'a1', category_id: null, amount: 10, type: 'income', description: '', transaction_date: '2026-11-12' });
     assert.equal(tx.id, 'tx1');
   }
+});
+
+const { goalSchedule, allocateGoals } = load('src/lib/goalPlanning.ts');
+test('Goal projection handles tiny contributions without invalid JavaScript dates', () => {
+  const { goalCompletionDate, bogotaDay } = load('src/lib/goalPlanning.ts');
+  assert.equal(goalCompletionDate(1000, 100, '2026-11-12'), '2026-11-21');
+  assert.equal(goalCompletionDate(999999999999, 0.01, '2026-11-12'), null);
+  assert.equal(bogotaDay('2026-11-12'), '2026-11-12');
+});
+const goal = (overrides = {}) => ({ id: 'g1', name: 'Viaje', target_amount: 900, current_amount: 0, target_date: '2026-11-20', status: 'active', created_at: '2026-11-12', goal_contributions: [], ...overrides });
+test('Goal schedule uses inclusive calendar days and separate weekly/monthly deposit counts', () => {
+  const plan = goalSchedule(goal(), '2026-11-12');
+  assert.equal(plan.days, 9);
+  assert.equal(plan.daily, 100);
+  assert.equal(plan.weeks, 2);
+  assert.equal(plan.weekly, 450);
+  assert.equal(plan.months, 1);
+  assert.equal(plan.monthly, 900);
+});
+test('Monthly deposits respect month lengths, leap years and the initial anchor day', () => {
+  assert.equal(goalSchedule(goal({ target_date: '2027-03-31' }), '2027-01-31').months, 3);
+  assert.equal(goalSchedule(goal({ target_date: '2027-03-30' }), '2027-01-31').months, 2);
+  assert.equal(goalSchedule(goal({ target_date: '2028-02-29' }), '2028-01-31').months, 2);
+});
+test('Saving the daily quota does not cause another quota to be suggested on refresh', () => {
+  const plan = goalSchedule(goal({ target_amount: 1000, current_amount: 100, target_date: '2026-11-21', goal_contributions: [{ amount: 100, contribution_date: '2026-11-12T12:00:00-05:00' }] }), '2026-11-12');
+  assert.equal(plan.daily, 0);
+  assert.equal(plan.paidToday, 100);
+  assert.equal(goalSchedule({ ...plan.goal }, '2026-11-13').daily, 100);
+});
+test('Overdue, completed, paused and undated goals do not invent a future deadline', () => {
+  assert.equal(goalSchedule(goal({ target_date: '2026-11-11' }), '2026-11-12').overdue, true);
+  assert.equal(goalSchedule(goal({ target_date: null }), '2026-11-12').daily, null);
+  assert.equal(allocateGoals([goal({ status: 'paused' }), goal({ current_amount: 900 })], 500, '2026-11-12').total, 0);
+});
+test('Goals share one budget, with dated goals before flexible goals', () => {
+  const rows = [goal({ id: 'flex', target_date: null }), goal({ id: 'later', target_date: '2026-12-12' }), goal({ id: 'soon' })];
+  const allocation = allocateGoals(rows, 100, '2026-11-12');
+  assert.equal(allocation.total, 100);
+  assert.equal(allocation.rows[0].goal.id, 'soon');
+  assert.equal(allocation.rows[0].amount, 100);
+  assert.equal(allocation.rows[1].amount, 0);
+});
+const unifiedData = (overrides = {}) => ({
+  settings: { ...planning.defaultSettings, daily_essentials: 30000, daily_personal: 10000 }, plans: [], readings: [], fund: { balance: 0 }, moto: null, debts: [],
+  accounts: [{ type: 'cash', balance: 100000 }],
+  transactions: [{ id: 'income', type: 'income', amount: 100000, transaction_date: '2026-11-12T12:00:00-05:00' }],
+  goals: [goal({ target_amount: 900000 })], ...overrides,
+});
+test('Unified allocation protects expenses, takes 20% for goals, and leaves a real base', () => {
+  const plan = planning.planningSnapshot(unifiedData(), '2026-11-12');
+  assert.equal(plan.budget.debt, 0); // No phantom debt allocation when there are no debts.
+  assert.equal(plan.workRemaining, 30000);
+  assert.equal(plan.personalRemaining, 10000);
+  assert.equal(plan.goals.total, 12000);
+  assert.equal(plan.base, 48000);
+  assert.equal(plan.workRemaining + plan.personalRemaining + plan.goals.total + plan.base, 100000);
+});
+test('A goal contribution is neither a second living expense nor an opportunity to apply 20% again', () => {
+  const contribution = { amount: 12000, contribution_date: '2026-11-12T12:00:00-05:00', financial_transaction_id: 'saving' };
+  const data = unifiedData({ accounts: [{ type: 'cash', balance: 88000 }], goals: [goal({ target_amount: 900000, current_amount: 12000, goal_contributions: [contribution] })] });
+  data.transactions.push({ id: 'saving', type: 'expense', source: 'goal_contribution', amount: 12000, transaction_date: '2026-11-12T12:00:00-05:00' });
+  const plan = planning.planningSnapshot(data, '2026-11-12');
+  assert.equal(plan.spent, 0);
+  assert.equal(plan.goalPaid, 12000);
+  assert.equal(plan.goals.total, 0);
+  assert.equal(plan.base, 48000);
+});
+test('Underfunded days never allocate more than received and report unmet living needs', () => {
+  const plan = planning.planningSnapshot(unifiedData({ accounts: [{ type: 'cash', balance: 10000 }], transactions: [{ id: 'income', type: 'income', amount: 10000, transaction_date: '2026-11-12T12:00:00-05:00' }] }), '2026-11-12');
+  assert.equal(plan.workRemaining, 10000);
+  assert.equal(plan.personalRemaining, 0);
+  assert.equal(plan.livingShortfall, 30000);
+  assert.equal(plan.goals.total, 0);
+  assert.equal(plan.base, 0);
+});
+test('Chosen personal categories reduce their own budget without consuming the work allowance twice', () => {
+  const data = unifiedData({ settings: { ...planning.defaultSettings, daily_essentials: 30000, daily_personal: 10000, personal_category_ids: ['personal'] }, accounts: [{ type: 'cash', balance: 95000 }] });
+  data.transactions.push({ id: 'lunch', type: 'expense', category_id: 'personal', amount: 5000, transaction_date: '2026-11-12T12:00:00-05:00' });
+  const plan = planning.planningSnapshot(data, '2026-11-12');
+  assert.equal(plan.workRemaining, 30000);
+  assert.equal(plan.personalRemaining, 5000);
+  assert.equal(plan.spent, 5000);
+  assert.equal(plan.goals.total, 12000);
 });

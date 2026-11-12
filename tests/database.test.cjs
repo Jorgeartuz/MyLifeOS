@@ -13,6 +13,7 @@ test('PostgreSQL migrations, authorization and atomic money operations', { timeo
   const moto = 'cccccccc-cccc-cccc-cccc-cccccccccccc';
   const plan = 'dddddddd-dddd-dddd-dddd-dddddddddddd';
   const debtId = 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee';
+  const goalId = 'ffffffff-ffff-ffff-ffff-ffffffffffff';
   async function scalar(sql) { return (await db.query(sql)).rows[0].value; }
   async function isolated(work) {
     await db.exec('begin');
@@ -34,16 +35,20 @@ test('PostgreSQL migrations, authorization and atomic money operations', { timeo
       create table public.accounts(id uuid primary key default gen_random_uuid(), user_id uuid references auth.users(id), name text not null, type text not null, balance numeric(14,2) not null default 0, is_active boolean not null default true);
       create table public.categories(id uuid primary key default gen_random_uuid(), user_id uuid references auth.users(id), name text, type public.category_kind, is_active boolean default true);
       create table public.transactions(id uuid primary key default gen_random_uuid(), user_id uuid references auth.users(id), account_id uuid not null references public.accounts(id), category_id uuid references public.categories(id), amount numeric(14,2), type public.transaction_kind, description text, source text, transaction_date timestamptz not null, created_at timestamptz default now());
+      create type public.goal_status as enum ('active','completed','paused','cancelled');
+      create table public.savings_goals(id uuid primary key default gen_random_uuid(),user_id uuid not null references auth.users(id),name text not null,target_amount numeric(14,2) not null,target_date date,status public.goal_status not null default 'active',created_at timestamptz not null default now());
+      create table public.goal_contributions(id uuid primary key default gen_random_uuid(),user_id uuid not null references auth.users(id),goal_id uuid not null references public.savings_goals(id),account_id uuid not null references public.accounts(id),amount numeric(14,2) not null,notes text,contribution_date timestamptz not null default now(),created_at timestamptz not null default now());
       insert into auth.users values('${user}'),('${other}');
       insert into public.accounts(id,user_id,name,type,balance) values('${account}','${user}','Efectivo','cash',100000),('${otherAccount}','${other}','Otra cuenta','cash',100000);
     `);
-    for (const name of ['202611120001_life_modules.sql', '202611120002_personal_planning.sql']) {
+    for (const name of ['202611120001_life_modules.sql', '202611120002_personal_planning.sql', '202611120003_unified_goal_planning.sql']) {
       await db.exec(fs.readFileSync(path.join(__dirname, '..', 'supabase', 'migrations', name), 'utf8'));
     }
     await db.exec(`
       insert into public.motorcycles(id,user_id,model,odometer) values('${moto}','${user}','Moto',43000);
       insert into public.motorcycle_service_plans(id,user_id,motorcycle_id,name,interval_km,last_service_km,last_service_date,estimated_cost) values('${plan}','${user}','${moto}','Aceite',2000,43000,'2026-01-01',50000);
       insert into public.debts(id,user_id,name,creditor,original_amount) values('${debtId}','${user}','Préstamo','Banco',80000);
+      insert into public.savings_goals(id,user_id,name,target_amount,target_date) values('${goalId}','${user}','Viaje',50000,current_date+30);
       select set_config('request.jwt.claim.sub','${user}',false);
     `);
     await t.test('Migrations compile with enum transaction/category types and capture initial odometer', async () => {
@@ -114,6 +119,40 @@ test('PostgreSQL migrations, authorization and atomic money operations', { timeo
       await db.exec(`update public.debts set annual_interest_rate=25, minimum_payment=1000 where id='${debtId}'`);
       assert.equal(Number(await scalar(`select annual_interest_rate as value from public.debts where id='${debtId}'`)), 25);
       await rejected(`update public.debts set original_amount=0 where id='${debtId}'`, /permission denied/);
+    }));
+    await t.test('Goal contributions debit account and update progress atomically without credit', () => isolated(async () => {
+      await db.exec(`set local role authenticated; select public.contribute_to_savings_goal('${goalId}','${account}',10000,'Hoy')`);
+      const overview = await scalar('select public.get_savings_goal_overview() as value');
+      assert.equal(overview[0].current_amount, 10000);
+      assert.equal(overview[0].goal_contributions.length, 1);
+      assert.ok(overview[0].goal_contributions[0].financial_transaction_id);
+      await rejected(`select public.contribute_to_savings_goal('${goalId}','${account}',50000,null)`, /supera lo que falta/);
+      await db.exec('reset role');
+      assert.equal(Number(await scalar(`select balance as value from public.accounts where id='${account}'`)), 90000);
+      assert.equal(await scalar('select count(*)::int as value from public.transactions'), 1);
+    }));
+    await t.test('Reaching a goal marks it complete; editing cannot erase saved progress', () => isolated(async () => {
+      await db.exec(`select public.contribute_to_savings_goal('${goalId}','${account}',50000,null)`);
+      assert.equal(await scalar(`select status as value from public.savings_goals where id='${goalId}'`), 'completed');
+      await rejected(`select public.contribute_to_savings_goal('${goalId}','${account}',1,null)`, /no está activa/);
+      await rejected(`select public.update_savings_goal_plan('${goalId}','Viaje',49999,current_date+30)`, /menor a lo que ya ahorraste/);
+      await db.exec(`select public.update_savings_goal_plan('${goalId}','Viaje',60000,current_date+60)`);
+      assert.equal(await scalar(`select status as value from public.savings_goals where id='${goalId}'`), 'active');
+    }));
+    await t.test('Goal ledger sums more than 1000 historical contributions without exposing another user', () => isolated(async () => {
+      await db.exec(`insert into public.goal_contributions(user_id,goal_id,account_id,amount,contribution_date) select '${user}','${goalId}','${account}',1,now()-interval '90 days' from generate_series(1,1100)`);
+      const overview = await scalar('select public.get_savings_goal_overview() as value');
+      assert.equal(overview[0].current_amount, 1100);
+      assert.equal(overview[0].goal_contributions.length, 0);
+      await db.exec(`select set_config('request.jwt.claim.sub','${other}',true)`);
+      assert.deepEqual(await scalar('select public.get_savings_goal_overview() as value'), []);
+      await rejected(`select public.contribute_to_savings_goal('${goalId}','${otherAccount}',1,null)`, /Meta no encontrada/);
+    }));
+    await t.test('Insufficient funds leave goal balance and account unchanged', () => isolated(async () => {
+      await db.exec(`update public.accounts set balance=500 where id='${account}'`);
+      await rejected(`select public.contribute_to_savings_goal('${goalId}','${account}',1000,null)`, /Saldo insuficiente/);
+      assert.equal(await scalar('select count(*)::int as value from public.goal_contributions'), 0);
+      assert.equal(Number(await scalar(`select balance as value from public.accounts where id='${account}'`)), 500);
     }));
   } finally { await db.close(); }
 });

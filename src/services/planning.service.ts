@@ -1,6 +1,8 @@
+import { notifyPlanningChanged } from '../lib/planningEvents';
 import { supabase } from '../lib/supabase';
 import { lifeService } from './life.service';
 import { financeService } from './finance.service';
+import { goalsService } from './goals.service';
 import { today } from '../lib/life';
 import { addDays, defaultSettings } from '../lib/planning';
 import type { PlanningSettings, MaintenancePlan, OdometerReading, MotoFund, FundMovement } from '../types/planning';
@@ -48,18 +50,20 @@ export const planningService = {
     return transactions;
   },
   async overview() {
-    const [context, motorcycle, debts, accounts, transactions] = await Promise.all([
-      planningService.context(), lifeService.getMoto(), lifeService.getDebts(), financeService.getAccounts(), planningService.transactions(),
+    const [context, motorcycle, debts, accounts, transactions, goals, categories] = await Promise.all([
+      planningService.context(), lifeService.getMoto(), lifeService.getDebts(), financeService.getAccounts(), planningService.transactions(), goalsService.getGoals(), financeService.getCategories(),
     ]);
-    return { ...context, ...motorcycle, debts, accounts, transactions };
+    return { ...context, ...motorcycle, debts, accounts, transactions, goals, categories };
   },
   async saveSettings(settings: PlanningSettings) {
     const uid = await requireUser();
     const { error } = await supabase.from('personal_planning_settings').upsert({
       user_id: uid, debt_percent: settings.debt_percent, daily_essentials: settings.daily_essentials,
       cash_buffer: settings.cash_buffer, daily_km: settings.daily_km, strategy: settings.strategy,
+      goal_percent: settings.goal_percent, daily_personal: settings.daily_personal, personal_category_ids: settings.personal_category_ids,
     }, { onConflict: 'user_id' });
     if (error) throw error;
+    notifyPlanningChanged();
   },
   async savePlan(plan: Omit<MaintenancePlan, 'id'>, id?: string) {
     const uid = await requireUser();
@@ -67,23 +71,28 @@ export const planningService = {
       ? await supabase.from('motorcycle_service_plans').update(plan).eq('id', id).eq('user_id', uid)
       : await supabase.from('motorcycle_service_plans').insert({ ...plan, user_id: uid });
     if (error) throw error;
+    notifyPlanningChanged();
   },
   async archivePlan(id: string) {
     const uid = await requireUser();
     const { error } = await supabase.from('motorcycle_service_plans').update({ active: false }).eq('id', id).eq('user_id', uid);
     if (error) throw error;
+    notifyPlanningChanged();
   },
   async completeService(planId: string, date: string, odometer: number, cost: number, notes: string, fromFund: boolean) {
     const { error } = await supabase.rpc('complete_planned_service', { p_plan_id: planId, p_date: date, p_odometer: odometer, p_cost: cost, p_notes: notes, p_from_fund: fromFund });
     if (error) throw error;
+    notifyPlanningChanged();
   },
   async fundMovement(accountId: string, amount: number, refund: boolean) {
     const { error } = await supabase.rpc('move_motorcycle_fund', { p_account_id: accountId, p_amount: amount, p_refund: refund });
     if (error) throw error;
+    notifyPlanningChanged();
   },
   async updateDebtTerms(id: string, annualRate: number, minimum: number) {
     const uid = await requireUser();
     const { error } = await supabase.from('debts').update({ annual_interest_rate: annualRate, minimum_payment: minimum }).eq('id', id).eq('user_id', uid);
     if (error) throw error;
+    notifyPlanningChanged();
   },
 };

@@ -1,64 +1,32 @@
-import { Target, Calendar, Plus } from 'lucide-react'; // Eliminado TrendingUp
-import { type SavingsGoal } from '../../types/goals';
+import { Target } from 'lucide-react';
+import type { SavingsGoal } from '../../types/goals';
+import { goalSchedule, goalCompletionDate } from '../../lib/goalPlanning';
+import { today, money, dateLabel } from '../../lib/life';
 
 interface Props {
   goal: SavingsGoal;
-  onAddFunds: (goal: SavingsGoal) => void;
+  suggestedAmount?: number;
+  projectedDaily?: number;
+  onAddFunds: (goal: SavingsGoal, amount?: number) => void;
+  onEdit?: (goal: SavingsGoal) => void;
 }
-
-export const GoalCard = ({ goal, onAddFunds }: Props) => {
-  const current = goal.current_amount || 0;
-  const progress = Math.min(Math.round((current / goal.target_amount) * 100), 100);
-  const remaining = goal.target_amount - current;
-
-  return (
-    <div className="bg-surface p-6 rounded-card border border-border shadow-sm group hover:border-primary/30 transition-all">
-      <div className="flex justify-between items-start mb-6">
-        <div className="p-3 bg-primary/10 text-primary rounded-2xl">
-          <Target size={24} />
-        </div>
-        <div className="text-right">
-          <span className={`text-[10px] font-bold uppercase px-2 py-1 rounded-full ${
-            goal.status === 'active' ? 'bg-green-50 text-green-600' : 'bg-gray-100 text-gray-500'
-          }`}>
-            {goal.status}
-          </span>
-        </div>
-      </div>
-
-      <h3 className="font-bold text-text text-lg mb-1">{goal.name}</h3>
-      <div className="flex items-center gap-2 text-text-secondary text-xs mb-4">
-        <Calendar size={14} />
-        <span>{goal.target_date ? new Date(goal.target_date).toLocaleDateString() : 'Sin fecha límite'}</span>
-      </div>
-
-      <div className="space-y-4">
-        <div>
-          <div className="flex justify-between text-xs font-bold mb-2">
-            <span className="text-primary">{progress}% completado</span>
-            <span className="text-text-secondary">${current.toLocaleString()} / ${goal.target_amount.toLocaleString()}</span>
-          </div>
-          <div className="w-full h-2 bg-background rounded-full overflow-hidden">
-            <div 
-              className="h-full bg-primary rounded-full transition-all duration-1000" 
-              style={{ width: `${progress}%` }} 
-            />
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-4 pt-2">
-          <div className="p-3 bg-background rounded-xl">
-            <p className="text-[10px] text-text-secondary font-bold uppercase">Restante</p>
-            <p className="text-sm font-bold text-text">${remaining > 0 ? remaining.toLocaleString() : 0}</p>
-          </div>
-          <button 
-            onClick={() => onAddFunds(goal)}
-            className="flex items-center justify-center gap-2 bg-primary text-white rounded-xl font-bold text-xs hover:bg-primary-dark transition-all active:scale-95 shadow-md shadow-primary/10"
-          >
-            <Plus size={16} /> Ahorrar
-          </button>
-        </div>
-      </div>
-    </div>
-  );
+export const GoalCard = ({ goal, onAddFunds, onEdit, suggestedAmount = 0, projectedDaily = 0 }: Props) => {
+  const plan = goalSchedule(goal, today());
+  const current = Number(goal.current_amount || 0);
+  const progress = Number(goal.target_amount) > 0 ? Math.min(100, Math.round(current / Number(goal.target_amount) * 100)) : 0;
+  const completion = plan.active ? goalCompletionDate(plan.remaining, projectedDaily, today()) : null;
+  const statuses = { active: 'Activa', completed: 'Completada', paused: 'Pausada', cancelled: 'Cancelada' };
+  return <article className="bg-surface p-6 rounded-card border border-border shadow-sm space-y-4">
+    <div className="flex justify-between gap-3 items-center"><Target className="text-primary" size={24} /><span className="text-xs font-bold text-primary">{plan.remaining === 0 ? 'Completada' : statuses[goal.status]}</span></div>
+    <div><h3 className="font-bold text-lg">{goal.name}</h3><p className={plan.overdue ? 'text-sm text-red-700' : 'text-sm text-text-secondary'}>{goal.target_date ? `Fecha límite: ${dateLabel(goal.target_date)}${plan.overdue ? ' · Vencida' : ''}` : 'Sin fecha límite'}</p></div>
+    <div><div className="flex justify-between gap-2 text-xs mb-2"><span>{progress} %</span><span>{money(current)} / {money(Number(goal.target_amount))}</span></div><div className="h-2 rounded-full overflow-hidden bg-background" role="progressbar" aria-label={`Progreso de ${goal.name}`} aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100}><div className="h-full bg-primary" style={{ width: `${progress}%` }} /></div></div>
+    <p className="text-sm">Te faltan <strong>{money(plan.remaining)}</strong>.</p>
+    {plan.active && <>
+      {plan.daily !== null ? <div className="space-y-2"><p className="text-xs text-text-secondary">Ritmos alternativos para tu fecha; no se suman entre sí. Los aportes comienzan hoy.</p><div className="grid grid-cols-3 gap-2">{[['Diario', plan.daily], ['Semanal', plan.weekly], ['Mensual', plan.monthly]].map(([label, amount]) => <div key={label} className="bg-background rounded-xl p-2"><p className="text-xs text-text-secondary">{label}</p><p className="font-bold text-sm mt-1">{money(Number(amount))}</p></div>)}</div><p className="text-xs text-text-secondary">Quedan {plan.days} días calendario, {plan.weeks} aportes semanales o {plan.months} mensuales. El diario ya descuenta lo que ahorraste hoy.</p></div> : <p className="text-xs text-text-secondary">Añade una fecha límite para calcular aportes diarios, semanales y mensuales.</p>}
+      <div className="p-3 bg-blue-50 rounded-xl space-y-1"><p className="text-sm">Con tus ingresos de hoy: <strong>{money(suggestedAmount)}</strong>.</p><p className="text-xs text-text-secondary">Ya aportaste hoy {money(plan.paidToday)}. Esta sugerencia comparte el mismo presupuesto de moto, deudas y gastos.</p>{plan.daily !== null && suggestedAmount < plan.daily && <p className="text-xs text-orange-700">Hoy faltan {money(plan.daily - suggestedAmount)} para sostener la fecha.</p>}</div>
+      <p className="text-xs text-text-secondary">{completion ? `Con tu ritmo estimado de ${money(projectedDaily)}/día, terminarías aprox. el ${dateLabel(completion)}${goal.target_date && completion > goal.target_date ? ', después de la fecha límite' : ''}.` : 'Aún no hay un ritmo de ingresos suficiente para estimar cuándo terminarías.'} Es un escenario, no una fecha garantizada.</p>
+      <button className="module-button w-full" disabled={suggestedAmount <= 0} onClick={() => onAddFunds(goal, suggestedAmount)}>Guardar {money(suggestedAmount)} hoy</button>
+    </>}
+    <div className="flex flex-wrap justify-between gap-3 text-sm">{plan.active && <button className="text-primary" onClick={() => onAddFunds(goal)}>Elegir otro aporte</button>}{onEdit && <button className="text-primary" onClick={() => onEdit(goal)}>Ajustar monto o fecha</button>}</div>
+  </article>;
 };

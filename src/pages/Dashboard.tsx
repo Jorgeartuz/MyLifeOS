@@ -62,6 +62,12 @@ const Dashboard = () => {
   }, [period]);
 
   useEffect(() => {
+    const refresh = () => { void loadDashboard(); };
+    window.addEventListener('lifeos:planning-changed', refresh);
+    return () => window.removeEventListener('lifeos:planning-changed', refresh);
+  }, [loadDashboard]);
+
+  useEffect(() => {
     let isMounted = true;
 
     const executeLoad = async () => {

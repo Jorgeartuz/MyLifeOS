@@ -1,12 +1,12 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Module, Panel, Field, SaveButton, Feedback } from '../components/ui/Module';
-import { useModule } from '../hooks/useModule';
+import { usePlanningOverview } from '../hooks/usePlanningOverview';
 import { lifeService } from '../services/life.service';
-import { planningService } from '../services/planning.service';
+
 import { PersonalPlan, DebtTerms } from '../components/finance/PersonalPlan';
 import { today, money, dateLabel, errorMessage, debtRemaining as remaining } from '../lib/life';
 export default function Deudas() {
-  const { data, loading, error, reload } = useModule(planningService.overview);
+  const { data, loading, error, reload } = usePlanningOverview();
   const [suggested, setSuggested] = useState<number | undefined>();
   const [busy, setBusy] = useState(false); const [message, setMessage] = useState(''); const [success, setSuccess] = useState(''); const [selected, setSelected] = useState('');
   useEffect(() => { if (selected) document.getElementById('debt-payment')?.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, [selected, suggested]);

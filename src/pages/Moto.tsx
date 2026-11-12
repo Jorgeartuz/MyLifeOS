@@ -1,13 +1,13 @@
 import { useState, type FormEvent } from 'react';
 import { Module, Panel, Field, SaveButton, Feedback } from '../components/ui/Module';
-import { useModule } from '../hooks/useModule';
+import { usePlanningOverview } from '../hooks/usePlanningOverview';
 import { lifeService } from '../services/life.service';
-import { planningService } from '../services/planning.service';
+
 import { MotoPlanning } from '../components/finance/MotoPlanning';
 import { today, money, dateLabel, errorMessage } from '../lib/life';
 
 export default function Moto() {
-  const { data, loading, error, reload } = useModule(planningService.overview);
+  const { data, loading, error, reload } = usePlanningOverview();
   const [busy, setBusy] = useState(false); const [message, setMessage] = useState(''); const [success, setSuccess] = useState('');
   const moto = data?.moto;
   async function save(e: FormEvent<HTMLFormElement>, maintenance = false) {

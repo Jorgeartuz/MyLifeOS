@@ -3,6 +3,7 @@ import { X, Loader2, PiggyBank } from 'lucide-react';
 import { goalsService } from '../../services/goals.service';
 import { type SavingsGoal } from '../../types/goals';
 import { type Account } from '../../types/finance';
+import { errorMessage } from '../../lib/life';
 
 interface Props {
   isOpen: boolean;
@@ -10,11 +11,12 @@ interface Props {
   goal: SavingsGoal | null;
   accounts: Account[];
   onSuccess: () => void;
+  initialAmount?: number;
 }
 
-export const ContributionModal = ({ isOpen, onClose, goal, accounts, onSuccess }: Props) => {
+export const ContributionModal = ({ isOpen, onClose, goal, accounts, onSuccess, initialAmount }: Props) => {
   const [loading, setLoading] = useState(false);
-  const [amount, setAmount] = useState('');
+  const [amount, setAmount] = useState(initialAmount && initialAmount > 0 ? String(initialAmount) : '');
   const [accountId, setAccountId] = useState('');
   const [notes, setNotes] = useState('');
 
@@ -38,7 +40,7 @@ export const ContributionModal = ({ isOpen, onClose, goal, accounts, onSuccess }
       setAccountId('');
       setNotes('');
     } catch (err: unknown) { // CAMBIADO DE any A unknown
-      const message = err instanceof Error ? err.message : "Error al realizar el ahorro";
+      const message = errorMessage(err);
       alert(message);
     } finally {
       setLoading(false);
@@ -63,6 +65,9 @@ export const ContributionModal = ({ isOpen, onClose, goal, accounts, onSuccess }
             <label className="text-[10px] font-bold text-text-secondary uppercase px-1">¿Cuánto vas a ahorrar?</label>
             <input 
               type="number" 
+              min="0.01"
+              step="0.01"
+              max={Math.max(0, Number(goal.target_amount) - Number(goal.current_amount || 0))}
               required 
               value={amount} 
               onChange={e => setAmount(e.target.value)}
@@ -80,7 +85,7 @@ export const ContributionModal = ({ isOpen, onClose, goal, accounts, onSuccess }
               className="w-full bg-background border border-border rounded-xl py-3 px-3 text-sm outline-none focus:ring-2 focus:ring-primary/20"
             >
               <option value="">Selecciona una cuenta...</option>
-              {accounts.map(acc => (
+              {accounts.filter(acc => acc.type !== 'credit_card').map(acc => (
                 <option key={acc.id} value={acc.id}>
                   {acc.name} (${acc.balance.toLocaleString()})
                 </option>

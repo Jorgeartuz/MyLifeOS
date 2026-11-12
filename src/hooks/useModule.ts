@@ -1,21 +1,26 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { errorMessage } from '../lib/life';
 
 export function useModule<T>(loader: () => Promise<T>) {
   const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
+  const generation = useRef(0);
+  const mounted = useRef(false);
   const reload = useCallback(async () => {
-    try { const result = await loader(); setData(result); setError(''); }
-    catch (err) { setError(errorMessage(err)); }
-    finally { setLoading(false); }
+    const request = ++generation.current;
+    try { const result = await loader(); if (mounted.current && request === generation.current) { setData(result); setError(''); } }
+    catch (err) { if (mounted.current && request === generation.current) setError(errorMessage(err)); }
+    finally { if (mounted.current && request === generation.current) setLoading(false); }
   }, [loader]);
   useEffect(() => {
     let active = true;
-    loader().then(result => { if (active) { setData(result); setError(''); } })
-      .catch(err => { if (active) setError(errorMessage(err)); })
-      .finally(() => { if (active) setLoading(false); });
-    return () => { active = false; };
+    mounted.current = true;
+    const request = ++generation.current;
+    loader().then(result => { if (active && request === generation.current) { setData(result); setError(''); } })
+      .catch(err => { if (active && request === generation.current) setError(errorMessage(err)); })
+      .finally(() => { if (active && request === generation.current) setLoading(false); });
+    return () => { active = false; mounted.current = false; };
   }, [loader]);
   return { data, error, loading, reload };
 }

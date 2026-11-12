@@ -1,30 +1,17 @@
+import { notifyPlanningChanged } from '../lib/planningEvents';
 import { supabase } from '../lib/supabase';
-import { financeService } from './finance.service';
 import { type SavingsGoal } from '../types/goals';
 
 export const goalsService = {
   async getGoals() {
-    const { data, error } = await supabase
-      .from('savings_goals')
-      .select(`
-        *,
-        goal_contributions (amount)
-      `)
-      .order('created_at', { ascending: false });
-
+    const { data, error } = await supabase.rpc('get_savings_goal_overview');
     if (error) throw error;
-
-    return data.map(goal => ({
-      ...goal,
-      current_amount: goal.goal_contributions?.reduce(
-        (sum: number, c: { amount: number | string }) => sum + Number(c.amount),
-        0
-      ) || 0
-    })) as SavingsGoal[];
+    return (data || []) as SavingsGoal[];
   },
-
   async createGoal(name: string, target_amount: number, target_date: string | null) {
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError) throw authError;
+    if (!user) throw new Error('Inicia sesión para continuar.');
     const { data, error } = await supabase
       .from('savings_goals')
       .insert([{
@@ -38,6 +25,7 @@ export const goalsService = {
       .single();
 
     if (error) throw error;
+    notifyPlanningChanged();
     return data as SavingsGoal;
   },
 
@@ -47,54 +35,17 @@ export const goalsService = {
     amount: number;
     notes?: string | null;
   }) {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('No hay usuario autenticado');
-
-    // 1. Obtener nombre de la meta
-    const { data: goal } = await supabase
-      .from('savings_goals')
-      .select('name')
-      .eq('id', payload.goal_id)
-      .maybeSingle();
-
-    const goalName = goal?.name || 'Meta de Ahorro';
-
-    // 2. Buscar categoría de ahorro si existe
-    const { data: categories } = await supabase
-      .from('categories')
-      .select('id, name')
-      .eq('user_id', user.id)
-      .eq('type', 'expense');
-
-    const savingCat = categories?.find(c => 
-      c.name.toLowerCase().includes('ahorro') || 
-      c.name.toLowerCase().includes('meta')
-    );
-
-    // 3. Crear transacción financiera para debitar la cuenta y que quede en el historial
-    const tx = await financeService.createTransaction({
-      account_id: payload.account_id,
-      category_id: savingCat ? savingCat.id : (categories?.[0]?.id || null),
-      amount: payload.amount,
-      type: 'expense',
-      description: `Aporte a meta: ${goalName}${payload.notes ? ` (${payload.notes})` : ''}`,
-      transaction_date: new Date().toISOString()
+    const { error } = await supabase.rpc('contribute_to_savings_goal', {
+      p_goal_id: payload.goal_id, p_account_id: payload.account_id,
+      p_amount: payload.amount, p_notes: payload.notes || null,
     });
+    if (error) throw error;
+    notifyPlanningChanged();
+  },
 
-    try {
-      const { error: contribError } = await supabase
-        .from('goal_contributions')
-        .insert([{
-          ...payload,
-          user_id: user.id,
-          contribution_date: new Date().toISOString()
-        }]);
-
-      if (contribError) throw contribError;
-    } catch (err) {
-      // Revertir la transacción si falla la inserción de la contribución
-      await financeService.deleteTransaction(tx);
-      throw err;
-    }
+  async updateGoal(id: string, name: string, target: number, date: string | null) {
+    const { error } = await supabase.rpc('update_savings_goal_plan', { p_goal_id: id, p_name: name, p_target: target, p_date: date });
+    if (error) throw error;
+    notifyPlanningChanged();
   }
 };

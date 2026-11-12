@@ -1,3 +1,4 @@
+import { notifyPlanningChanged } from '../lib/planningEvents';
 import { supabase } from '../lib/supabase';
 import type { Motorcycle, Maintenance, Debt, CalendarEvent } from '../types/life';
 
@@ -20,10 +21,12 @@ export const lifeService = {
     const id = await userId();
     const { error } = await supabase.from('motorcycles').upsert({ ...payload, user_id: id }, { onConflict: 'user_id' });
     if (error) throw error;
+    notifyPlanningChanged();
   },
   async addMaintenance(payload: Omit<Maintenance, 'id'>) {
     const { error } = await supabase.rpc('record_motorcycle_maintenance', { p_motorcycle_id: payload.motorcycle_id, p_title: payload.title, p_performed_on: payload.performed_on, p_odometer: payload.odometer, p_cost: payload.cost, p_notes: payload.notes });
     if (error) throw error;
+    notifyPlanningChanged();
   },
   async getDebts() {
     const id = await userId();
@@ -35,10 +38,12 @@ export const lifeService = {
     const id = await userId();
     const { error } = await supabase.from('debts').insert({ ...payload, user_id: id });
     if (error) throw error;
+    notifyPlanningChanged();
   },
   async payDebt(debtId: string, accountId: string, amount: number, paidOn: string) {
     const { error } = await supabase.rpc('pay_personal_debt', { p_debt_id: debtId, p_account_id: accountId, p_amount: amount, p_paid_on: paidOn });
     if (error) throw error;
+    notifyPlanningChanged();
   },
   async getEvents() {
     const id = await userId();

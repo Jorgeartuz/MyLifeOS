@@ -1,3 +1,4 @@
+import { notifyPlanningChanged } from '../lib/planningEvents';
 import { supabase } from '../lib/supabase';
 import type { Account, AccountType, Category, Transaction, TransactionType } from '../types/finance';
 
@@ -20,6 +21,7 @@ export const financeService = {
       .insert([{ name, type, balance, user_id: user?.id }])
       .select().single();
     if (error) throw error;
+    notifyPlanningChanged();
     return data as Account;
   },
 
@@ -106,11 +108,13 @@ export const financeService = {
     if (error) throw error;
     const transaction = Array.isArray(data) ? data[0] : data;
     if (!transaction?.id) throw new Error('No se recibió el movimiento registrado. Recarga antes de volver a intentarlo.');
+    notifyPlanningChanged();
     return transaction as Transaction;
   },
 
   async deleteTransaction(transaction: Transaction) {
     const { error } = await supabase.rpc('reverse_financial_entry', { p_transaction_id: transaction.id });
     if (error) throw error;
+    notifyPlanningChanged();
   }
 };

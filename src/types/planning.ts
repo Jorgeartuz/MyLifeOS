@@ -4,6 +4,9 @@ export interface PlanningSettings {
   cash_buffer: number;
   daily_km: number;
   strategy: 'avalanche' | 'snowball';
+  goal_percent: number;
+  daily_personal: number;
+  personal_category_ids: string[];
 }
 
 export interface MaintenancePlan {

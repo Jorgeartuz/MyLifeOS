@@ -10,6 +10,7 @@ export interface SavingsGoal {
   created_at: string;
   // Campo calculado (Join o Sum)
   current_amount?: number;
+  goal_contributions?: Pick<GoalContribution, 'amount' | 'contribution_date' | 'financial_transaction_id'>[];
 }
 
 export interface GoalContribution {
@@ -21,4 +22,5 @@ export interface GoalContribution {
   contribution_date: string;
   notes: string | null;
   created_at: string;
+  financial_transaction_id?: string | null;
 }
